@@ -49,10 +49,71 @@ impl App {
     }
 
     fn trigger_search(&mut self) {
-        // For now, just clear any existing results to show we're "searching"
-        // In a real implementation, this would spawn an async task
-        self.state.search_results = None;
-        self.list_state.select(Some(0));
+        if !self.state.search_query.is_empty() {
+            // Create some sample search results based on the query
+            use crate::models::*;
+
+            let sample_tracks = vec![
+                Track {
+                    id: "1".to_string(),
+                    name: format!("{} - Nothing Else Matters", self.state.search_query),
+                    uri: "spotify:track:1".to_string(),
+                    artists: vec![Artist {
+                        id: "1".to_string(),
+                        name: "Metallica".to_string(),
+                        genres: None,
+                        popularity: None,
+                    }],
+                    album: None,
+                    duration_ms: 360000,
+                    popularity: 90,
+                    preview_url: None,
+                },
+                Track {
+                    id: "2".to_string(),
+                    name: format!("{} - Enter Sandman", self.state.search_query),
+                    uri: "spotify:track:2".to_string(),
+                    artists: vec![Artist {
+                        id: "1".to_string(),
+                        name: "Metallica".to_string(),
+                        genres: None,
+                        popularity: None,
+                    }],
+                    album: None,
+                    duration_ms: 330000,
+                    popularity: 95,
+                    preview_url: None,
+                },
+                Track {
+                    id: "3".to_string(),
+                    name: format!("{} - Master of Puppets", self.state.search_query),
+                    uri: "spotify:track:3".to_string(),
+                    artists: vec![Artist {
+                        id: "1".to_string(),
+                        name: "Metallica".to_string(),
+                        genres: None,
+                        popularity: None,
+                    }],
+                    album: None,
+                    duration_ms: 515000,
+                    popularity: 88,
+                    preview_url: None,
+                },
+            ];
+
+            let search_response = SearchResponse {
+                tracks: Some(SearchTracks {
+                    items: sample_tracks,
+                    total: 3,
+                }),
+                artists: None,
+                albums: None,
+                playlists: None,
+            };
+
+            self.state.search_results = Some(search_response);
+            self.list_state.select(Some(0));
+        }
     }
 
     fn authenticate_user(&mut self) {
@@ -75,17 +136,20 @@ impl App {
     }
 
     fn play_selected_track(&mut self) {
-        if !self.state.user_authenticated {
-            return;
-        }
-
         if let Some(selected) = self.list_state.selected() {
             if let Some(ref results) = self.state.search_results {
                 if let Some(ref tracks) = results.tracks {
                     if let Some(track) = tracks.items.get(selected) {
                         self.state.current_track = Some(track.clone());
-                        self.state.is_playing = true;
-                        // In a real implementation, this would call spotify_client.play_track(&track.uri)
+
+                        if self.state.user_authenticated {
+                            self.state.is_playing = true;
+                            self.state.auth_message = "🎵 Playing track!".to_string();
+                            // In a real implementation, this would call spotify_client.play_track(&track.uri)
+                        } else {
+                            self.state.is_playing = false;
+                            self.state.auth_message = "🔒 Track selected! Authenticate to play.".to_string();
+                        }
                     }
                 }
             }
@@ -201,10 +265,14 @@ impl App {
                             }
                         }
                         KeyCode::Up => {
-                            self.move_selection(-1);
+                            if !self.input_mode {
+                                self.move_selection(-1);
+                            }
                         }
                         KeyCode::Down => {
-                            self.move_selection(1);
+                            if !self.input_mode {
+                                self.move_selection(1);
+                            }
                         }
                         _ => {}
                     }
@@ -355,7 +423,8 @@ impl App {
                 let track_items: Vec<ListItem> = tracks
                     .items
                     .iter()
-                    .map(|track| {
+                    .enumerate()
+                    .map(|(i, track)| {
                         let artist_names: String = track
                             .artists
                             .iter()
@@ -363,17 +432,23 @@ impl App {
                             .collect::<Vec<_>>()
                             .join(", ");
 
-                        ListItem::new(format!("{} - {}", track.name, artist_names))
+                        let item_text = format!("{}. {} - {}", i + 1, track.name, artist_names);
+                        ListItem::new(item_text)
                     })
                     .collect();
 
                 let tracks_list = List::new(track_items)
-                    .block(Block::default().title("Songs").borders(Borders::ALL))
+                    .block(Block::default().title("Songs (↑↓ to navigate, Enter to play)").borders(Borders::ALL))
                     .style(Style::default().fg(Color::White))
-                    .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+                    .highlight_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Black).bg(Color::White));
 
                 f.render_stateful_widget(tracks_list, search_chunks[1], &mut self.list_state);
             }
+        } else if !self.state.search_query.is_empty() {
+            // Show "searching" message
+            let searching_text = Paragraph::new("🔍 Type your search and press Enter...")
+                .block(Block::default().title("Songs").borders(Borders::ALL));
+            f.render_widget(searching_text, search_chunks[1]);
         } else {
             // Show sample search results like in the image
             let sample_tracks = vec![
