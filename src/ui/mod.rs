@@ -56,9 +56,15 @@ impl App {
     }
 
     fn authenticate_user(&mut self) {
-        // This would need to be async in a real implementation
-        // For now, just mark as authenticated
-        self.state.user_authenticated = true;
+        if self.state.user_authenticated {
+            // Already authenticated, show status
+            self.state.auth_message = "✅ Already authenticated for playback!".to_string();
+        } else if self.auth_client.is_some() {
+            // Show authentication instructions
+            self.state.auth_message = "🔐 Authentication required! Exit app (press 'q') and run: cargo run --bin authenticate".to_string();
+        } else {
+            self.state.auth_message = "❌ Authentication client not available".to_string();
+        }
     }
 
     fn toggle_playback(&mut self) {
@@ -140,30 +146,52 @@ impl App {
                                 self.state.search_query.push(c);
                             } else {
                                 match c {
-                                    '1' => self.state.current_view = ViewType::Search,
-                                    '2' => self.state.current_view = ViewType::Library,
-                                    '3' => self.state.current_view = ViewType::Playlists,
-                                    '4' => self.state.current_view = ViewType::Albums,
-                                    '5' => self.state.current_view = ViewType::Artists,
+                                    '1' => {
+                                        self.state.current_view = ViewType::Search;
+                                        self.state.auth_message.clear();
+                                    }
+                                    '2' => {
+                                        self.state.current_view = ViewType::Library;
+                                        self.state.auth_message.clear();
+                                    }
+                                    '3' => {
+                                        self.state.current_view = ViewType::Playlists;
+                                        self.state.auth_message.clear();
+                                    }
+                                    '4' => {
+                                        self.state.current_view = ViewType::Albums;
+                                        self.state.auth_message.clear();
+                                    }
+                                    '5' => {
+                                        self.state.current_view = ViewType::Artists;
+                                        self.state.auth_message.clear();
+                                    }
                                     ' ' => {
                                         self.toggle_playback();
+                                        self.state.auth_message.clear();
                                     }
                                     'u' => {
                                         self.authenticate_user();
                                     }
                                     'n' => {
                                         self.next_track();
+                                        self.state.auth_message.clear();
                                     }
                                     'p' => {
                                         self.previous_track();
+                                        self.state.auth_message.clear();
                                     }
                                     '+' => {
                                         self.volume_up();
+                                        self.state.auth_message.clear();
                                     }
                                     '-' => {
                                         self.volume_down();
+                                        self.state.auth_message.clear();
                                     }
-                                    _ => {}
+                                    _ => {
+                                        self.state.auth_message.clear();
+                                    }
                                 }
                             }
                         }
@@ -493,11 +521,13 @@ impl App {
                 .map(|a| a.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("🎵 {} - {}\n{}", track.name, artist_names,
-                if self.state.user_authenticated { "✅ Authenticated" } else { "❌ Not authenticated" })
+            format!("🎵 {} - {}\n{}\n{}", track.name, artist_names,
+                if self.state.user_authenticated { "✅ Authenticated" } else { "❌ Not authenticated" },
+                if !self.state.auth_message.is_empty() { &self.state.auth_message } else { "" })
         } else {
-            format!("No track playing\n{}",
-                if self.state.user_authenticated { "✅ Authenticated for playback" } else { "❌ Press 'u' to authenticate" })
+            format!("No track playing\n{}\n{}",
+                if self.state.user_authenticated { "✅ Authenticated for playback" } else { "❌ Press 'u' to authenticate" },
+                if !self.state.auth_message.is_empty() { &self.state.auth_message } else { "" })
         };
 
         let track_widget = Paragraph::new(track_info)

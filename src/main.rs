@@ -6,10 +6,11 @@ pub mod ui;
 use anyhow::Result;
 use dotenv::dotenv;
 use std::env;
+use std::fs;
 use tokio;
 
 use api::SpotifyClient;
-use auth::SpotifyAuth;
+use auth::{SpotifyAuth, UserTokens};
 use ui::{setup_terminal, restore_terminal, App};
 
 #[tokio::main]
@@ -35,8 +36,26 @@ async fn main() -> Result<()> {
     }
 
     println!("✅ Successfully authenticated with Spotify API!");
+
+    // Check for saved authentication tokens
+    let user_authenticated = if let Ok(tokens_data) = fs::read_to_string(".spotify_tokens") {
+        if let Ok(user_tokens) = serde_json::from_str::<UserTokens>(&tokens_data) {
+            spotify_client.set_user_tokens(user_tokens);
+            println!("🔑 Found saved authentication tokens!");
+            println!("🎵 Playback features are available!");
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if !user_authenticated {
+        println!("💡 Run 'cargo run --bin authenticate' to enable playback features!");
+    }
+
     println!("🎵 Starting SpotyCli...");
-    println!("💡 Press 'u' in the app to authenticate for playback features!");
 
     // Setup terminal
     let mut terminal = setup_terminal()?;
@@ -48,6 +67,9 @@ async fn main() -> Result<()> {
     // Create auth client for user authentication
     let auth_client = SpotifyAuth::new(client_id, client_secret);
     app.set_auth_client(auth_client);
+
+    // Set authentication status if tokens were loaded
+    app.state.user_authenticated = user_authenticated;
 
     let result = app.run(&mut terminal);
 

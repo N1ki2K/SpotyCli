@@ -50,14 +50,26 @@ A terminal-based Spotify client built in Rust using the Spotify Web API.
   - `5` - Artists
 
 ### Playback Controls (Requires Spotify Premium)
-- `u` - Authenticate for playback features
+
+**To Enable Playback Features:**
+1. First, authenticate by running: `cargo run --bin authenticate`
+2. Follow the browser authentication flow
+3. Run the main app: `cargo run`
+4. Playback controls will now be available!
+
+**Playback Controls:**
+- `u` - Show authentication status / Get auth instructions
 - `Space` - Play/Pause current track
 - `n` - Next track
 - `p` - Previous track
 - `+` - Volume up
 - `-` - Volume down
+- `Enter` - Play selected track
 
-**Note:** Playback features require a **Spotify Premium** account and user authentication.
+**Requirements:**
+- **Spotify Premium** account (required for playback)
+- Active Spotify device (desktop app, mobile, web player)
+- Successful authentication via browser
 
 ## Screenshots
 

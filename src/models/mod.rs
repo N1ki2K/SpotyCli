@@ -152,6 +152,7 @@ pub struct AppState {
     pub is_playing: bool,
     pub current_playback: Option<CurrentPlayback>,
     pub user_authenticated: bool,
+    pub auth_message: String,
     #[allow(dead_code)]
     pub volume: u8,
     pub user_playlists: Vec<Playlist>,
@@ -181,6 +182,7 @@ impl Default for AppState {
             is_playing: false,
             current_playback: None,
             user_authenticated: false,
+            auth_message: String::new(),
             volume: 80,
             user_playlists: Vec::new(),
             user_albums: Vec::new(),
