@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 use base64::Engine;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashMap;
-use url::Url;
 
 use crate::models::*;
+use crate::auth::UserTokens;
 
 #[derive(Debug, Clone)]
 pub struct SpotifyClient {
@@ -13,13 +13,17 @@ pub struct SpotifyClient {
     client_id: String,
     client_secret: String,
     access_token: Option<String>,
+    user_tokens: Option<UserTokens>,
+    #[allow(dead_code)]
     base_url: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
     access_token: String,
+    #[allow(dead_code)]
     token_type: String,
+    #[allow(dead_code)]
     expires_in: u64,
 }
 
@@ -30,6 +34,7 @@ impl SpotifyClient {
             client_id,
             client_secret,
             access_token: None,
+            user_tokens: None,
             base_url: "https://api.spotify.com/v1".to_string(),
         }
     }
@@ -137,5 +142,93 @@ impl SpotifyClient {
         } else {
             Err(anyhow!("No albums found in response"))
         }
+    }
+
+    pub fn set_user_tokens(&mut self, tokens: UserTokens) {
+        self.user_tokens = Some(tokens);
+    }
+
+    async fn make_user_request<T>(&self, method: &str, endpoint: &str, body: Option<serde_json::Value>) -> Result<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let tokens = self
+            .user_tokens
+            .as_ref()
+            .ok_or_else(|| anyhow!("User not authenticated"))?;
+
+        let url = format!("{}/{}", self.base_url, endpoint);
+        let mut request = match method {
+            "GET" => self.client.get(&url),
+            "POST" => self.client.post(&url),
+            "PUT" => self.client.put(&url),
+            "DELETE" => self.client.delete(&url),
+            _ => return Err(anyhow!("Unsupported HTTP method")),
+        };
+
+        request = request.header("Authorization", format!("Bearer {}", tokens.access_token));
+
+        if let Some(json_body) = body {
+            request = request.json(&json_body);
+        }
+
+        let response = request.send().await?;
+
+        if response.status().is_success() {
+            if response.content_length() == Some(0) {
+                // For empty responses, return a default value
+                return Ok(serde_json::from_str("{}")?);
+            }
+            let result = response.json().await?;
+            Ok(result)
+        } else {
+            let error_text = response.text().await?;
+            Err(anyhow!("API request failed: {}", error_text))
+        }
+    }
+
+    pub async fn get_current_playback(&self) -> Result<Option<CurrentPlayback>> {
+        match self.make_user_request::<CurrentPlayback>("GET", "me/player", None).await {
+            Ok(playback) => Ok(Some(playback)),
+            Err(_) => Ok(None), // No active device
+        }
+    }
+
+    pub async fn play_track(&self, track_uri: &str) -> Result<()> {
+        let body = serde_json::json!({
+            "uris": [track_uri]
+        });
+        self.make_user_request::<serde_json::Value>("PUT", "me/player/play", Some(body)).await?;
+        Ok(())
+    }
+
+    pub async fn pause_playback(&self) -> Result<()> {
+        self.make_user_request::<serde_json::Value>("PUT", "me/player/pause", None).await?;
+        Ok(())
+    }
+
+    pub async fn resume_playback(&self) -> Result<()> {
+        self.make_user_request::<serde_json::Value>("PUT", "me/player/play", None).await?;
+        Ok(())
+    }
+
+    pub async fn next_track(&self) -> Result<()> {
+        self.make_user_request::<serde_json::Value>("POST", "me/player/next", None).await?;
+        Ok(())
+    }
+
+    pub async fn previous_track(&self) -> Result<()> {
+        self.make_user_request::<serde_json::Value>("POST", "me/player/previous", None).await?;
+        Ok(())
+    }
+
+    pub async fn set_volume(&self, volume_percent: u8) -> Result<()> {
+        let endpoint = format!("me/player/volume?volume_percent={}", volume_percent.min(100));
+        self.make_user_request::<serde_json::Value>("PUT", &endpoint, None).await?;
+        Ok(())
+    }
+
+    pub async fn get_available_devices(&self) -> Result<DeviceList> {
+        self.make_user_request("GET", "me/player/devices", None).await
     }
 }

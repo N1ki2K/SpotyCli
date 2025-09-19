@@ -1,0 +1,1 @@
+/home/shrek/Documents/Projects/SpotyCli/target/debug/test_spotify: /home/shrek/Documents/Projects/SpotyCli/src/api/mod.rs /home/shrek/Documents/Projects/SpotyCli/src/bin/test_spotify.rs /home/shrek/Documents/Projects/SpotyCli/src/lib.rs /home/shrek/Documents/Projects/SpotyCli/src/models/mod.rs /home/shrek/Documents/Projects/SpotyCli/src/ui/mod.rs

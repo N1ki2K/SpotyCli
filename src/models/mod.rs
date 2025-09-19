@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct Track {
     pub id: String,
     pub name: String,
+    pub uri: String,
     pub artists: Vec<Artist>,
     pub album: Option<Album>,
     pub duration_ms: u32,
@@ -96,14 +97,62 @@ pub struct SearchPlaylists {
     pub total: u32,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CurrentPlayback {
+    pub device: Device,
+    pub shuffle_state: bool,
+    pub repeat_state: String,
+    pub timestamp: u64,
+    pub context: Option<PlaybackContext>,
+    pub progress_ms: Option<u64>,
+    pub item: Option<Track>,
+    pub currently_playing_type: String,
+    pub is_playing: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Device {
+    pub id: Option<String>,
+    pub is_active: bool,
+    pub is_private_session: bool,
+    pub is_restricted: bool,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub device_type: String,
+    pub volume_percent: Option<u8>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaybackContext {
+    pub external_urls: Option<ExternalUrls>,
+    pub href: String,
+    #[serde(rename = "type")]
+    pub context_type: String,
+    pub uri: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ExternalUrls {
+    pub spotify: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DeviceList {
+    pub devices: Vec<Device>,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub current_view: ViewType,
     pub search_query: String,
     pub search_results: Option<SearchResponse>,
+    #[allow(dead_code)]
     pub selected_item: usize,
     pub current_track: Option<Track>,
     pub is_playing: bool,
+    pub current_playback: Option<CurrentPlayback>,
+    pub user_authenticated: bool,
+    #[allow(dead_code)]
     pub volume: u8,
     pub user_playlists: Vec<Playlist>,
     pub user_albums: Vec<Album>,
@@ -117,6 +166,7 @@ pub enum ViewType {
     Playlists,
     Albums,
     Artists,
+    #[allow(dead_code)]
     Player,
 }
 
@@ -129,6 +179,8 @@ impl Default for AppState {
             selected_item: 0,
             current_track: None,
             is_playing: false,
+            current_playback: None,
+            user_authenticated: false,
             volume: 80,
             user_playlists: Vec::new(),
             user_albums: Vec::new(),

@@ -5,11 +5,10 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
     widgets::{
-        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap,
+        Block, Borders, List, ListItem, ListState, Paragraph, Wrap,
     },
     Frame, Terminal,
 };
@@ -17,12 +16,14 @@ use std::io;
 
 use crate::models::{AppState, ViewType};
 use crate::api::SpotifyClient;
+use crate::auth::SpotifyAuth;
 
 pub struct App {
     pub state: AppState,
     pub list_state: ListState,
     pub input_mode: bool,
     pub spotify_client: Option<SpotifyClient>,
+    pub auth_client: Option<SpotifyAuth>,
 }
 
 impl App {
@@ -35,6 +36,7 @@ impl App {
             list_state,
             input_mode: false,
             spotify_client: None,
+            auth_client: None,
         }
     }
 
@@ -42,11 +44,72 @@ impl App {
         self.spotify_client = Some(client);
     }
 
+    pub fn set_auth_client(&mut self, client: SpotifyAuth) {
+        self.auth_client = Some(client);
+    }
+
     fn trigger_search(&mut self) {
         // For now, just clear any existing results to show we're "searching"
         // In a real implementation, this would spawn an async task
         self.state.search_results = None;
         self.list_state.select(Some(0));
+    }
+
+    fn authenticate_user(&mut self) {
+        // This would need to be async in a real implementation
+        // For now, just mark as authenticated
+        self.state.user_authenticated = true;
+    }
+
+    fn toggle_playback(&mut self) {
+        if self.state.user_authenticated {
+            self.state.is_playing = !self.state.is_playing;
+            // In a real implementation, this would call the Spotify API
+        }
+    }
+
+    fn play_selected_track(&mut self) {
+        if !self.state.user_authenticated {
+            return;
+        }
+
+        if let Some(selected) = self.list_state.selected() {
+            if let Some(ref results) = self.state.search_results {
+                if let Some(ref tracks) = results.tracks {
+                    if let Some(track) = tracks.items.get(selected) {
+                        self.state.current_track = Some(track.clone());
+                        self.state.is_playing = true;
+                        // In a real implementation, this would call spotify_client.play_track(&track.uri)
+                    }
+                }
+            }
+        }
+    }
+
+    fn next_track(&mut self) {
+        if self.state.user_authenticated {
+            // In a real implementation, this would call spotify_client.next_track()
+        }
+    }
+
+    fn previous_track(&mut self) {
+        if self.state.user_authenticated {
+            // In a real implementation, this would call spotify_client.previous_track()
+        }
+    }
+
+    fn volume_up(&mut self) {
+        if self.state.user_authenticated {
+            self.state.volume = (self.state.volume + 10).min(100);
+            // In a real implementation, this would call spotify_client.set_volume()
+        }
+    }
+
+    fn volume_down(&mut self) {
+        if self.state.user_authenticated {
+            self.state.volume = self.state.volume.saturating_sub(10);
+            // In a real implementation, this would call spotify_client.set_volume()
+        }
     }
 
     pub fn run<B: ratatui::backend::Backend>(&mut self, terminal: &mut Terminal<B>) -> io::Result<()> {
@@ -64,9 +127,9 @@ impl App {
                         KeyCode::Enter => {
                             if self.input_mode {
                                 self.input_mode = false;
-                                // Here we would trigger search, but since we're in sync context
-                                // we'll just show placeholder results
                                 self.trigger_search();
+                            } else {
+                                self.play_selected_track();
                             }
                         }
                         KeyCode::Esc => {
@@ -83,7 +146,22 @@ impl App {
                                     '4' => self.state.current_view = ViewType::Albums,
                                     '5' => self.state.current_view = ViewType::Artists,
                                     ' ' => {
-                                        self.state.is_playing = !self.state.is_playing;
+                                        self.toggle_playback();
+                                    }
+                                    'u' => {
+                                        self.authenticate_user();
+                                    }
+                                    'n' => {
+                                        self.next_track();
+                                    }
+                                    'p' => {
+                                        self.previous_track();
+                                    }
+                                    '+' => {
+                                        self.volume_up();
+                                    }
+                                    '-' => {
+                                        self.volume_down();
                                     }
                                     _ => {}
                                 }
@@ -401,9 +479,9 @@ impl App {
         let player_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(33),
-                Constraint::Percentage(34),
-                Constraint::Percentage(33),
+                Constraint::Percentage(40),
+                Constraint::Percentage(30),
+                Constraint::Percentage(30),
             ])
             .split(area);
 
@@ -415,31 +493,38 @@ impl App {
                 .map(|a| a.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{}\n{}", track.name, artist_names)
+            format!("🎵 {} - {}\n{}", track.name, artist_names,
+                if self.state.user_authenticated { "✅ Authenticated" } else { "❌ Not authenticated" })
         } else {
-            "Vivo Alvaro Alexandre · OneBox Pro | Shuffle: Off | Repeat: Off | Volume: 108%.".to_string()
+            format!("No track playing\n{}",
+                if self.state.user_authenticated { "✅ Authenticated for playback" } else { "❌ Press 'u' to authenticate" })
         };
 
         let track_widget = Paragraph::new(track_info)
-            .block(Block::default().borders(Borders::ALL));
+            .block(Block::default().borders(Borders::ALL).title("Now Playing"));
 
         f.render_widget(track_widget, player_chunks[0]);
 
         // Player controls
-        let play_status = if self.state.is_playing { "⏸" } else { "▶" };
-        let controls = format!("⏮ {} ⏭", play_status);
+        let play_status = if self.state.is_playing { "⏸ Pause" } else { "▶ Play" };
+        let controls = format!("⏮ Prev | {} | Next ⏭\n\nControls:\nSpace: Play/Pause\nn: Next | p: Previous\n+/-: Volume | u: Auth", play_status);
+        let controls_color = if self.state.user_authenticated { Color::Green } else { Color::Yellow };
         let controls_widget = Paragraph::new(controls)
-            .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::Green));
+            .block(Block::default().borders(Borders::ALL).title("Controls"))
+            .style(Style::default().fg(controls_color));
 
         f.render_widget(controls_widget, player_chunks[1]);
 
-        // Progress and volume
-        let progress = "0:56/04 (-3:07)";
-        let progress_widget = Paragraph::new(progress)
-            .block(Block::default().borders(Borders::ALL));
+        // Volume and status
+        let status_info = format!("Volume: {}%\nStatus: {}\nMode: {}",
+            self.state.volume,
+            if self.state.is_playing { "Playing" } else { "Paused" },
+            if self.state.user_authenticated { "Premium" } else { "Browse Only" }
+        );
+        let status_widget = Paragraph::new(status_info)
+            .block(Block::default().borders(Borders::ALL).title("Status"));
 
-        f.render_widget(progress_widget, player_chunks[2]);
+        f.render_widget(status_widget, player_chunks[2]);
     }
 }
 

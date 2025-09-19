@@ -1,0 +1,12 @@
+- q - Quit application
+  - / - Enter search mode
+  - Enter - Execute search
+  - Esc - Exit search mode
+  - ↑/↓ - Navigate lists
+  - 1-5 - Switch between views:
+    - 1 - Search
+    - 2 - Library
+    - 3 - Playlists
+    - 4 - Albums
+    - 5 - Artists
+  - Space - Play/Pause (placeholder)

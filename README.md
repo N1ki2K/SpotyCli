@@ -36,9 +36,10 @@ A terminal-based Spotify client built in Rust using the Spotify Web API.
 
 ## Controls
 
-- `q` - Quit
+### Navigation
+- `q` - Quit application
 - `/` - Enter search mode
-- `Enter` - Execute search / select item
+- `Enter` - Execute search / Play selected track
 - `Esc` - Exit search mode
 - `↑/↓` - Navigate lists
 - `1-5` - Switch between views:
@@ -47,7 +48,16 @@ A terminal-based Spotify client built in Rust using the Spotify Web API.
   - `3` - Playlists
   - `4` - Albums
   - `5` - Artists
-- `Space` - Play/Pause (placeholder)
+
+### Playback Controls (Requires Spotify Premium)
+- `u` - Authenticate for playback features
+- `Space` - Play/Pause current track
+- `n` - Next track
+- `p` - Previous track
+- `+` - Volume up
+- `-` - Volume down
+
+**Note:** Playback features require a **Spotify Premium** account and user authentication.
 
 ## Screenshots
 
