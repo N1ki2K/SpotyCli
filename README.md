@@ -40,14 +40,21 @@ A terminal-based Spotify client built in Rust using the Spotify Web API.
 - `q` - Quit application
 - `/` - Enter search mode
 - `Enter` - Execute search / Play selected track
-- `Esc` - Exit search mode
+- `Esc` - Exit search mode / Return to Recently Played
 - `↑/↓` - Navigate lists
 - `1-5` - Switch between views:
-  - `1` - Search
+  - `1` - Search (shows Recently Played by default)
   - `2` - Library
   - `3` - Playlists
   - `4` - Albums
   - `5` - Artists
+
+### Music Discovery
+- **Recently Played:** Default view shows your recent tracks
+- **Search Mode:** Press `/`, type query, press `Enter` to search
+- **Switch Back:** Press `Esc` to return from search results to recently played
+- **Navigation:** Use `↑/↓` arrows in both modes
+- **Play:** Press `Enter` on any track to play it
 
 ### Playback Controls (Requires Spotify Premium)
 
