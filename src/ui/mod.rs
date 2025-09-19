@@ -137,20 +137,28 @@ impl App {
 
     fn play_selected_track(&mut self) {
         if let Some(selected) = self.list_state.selected() {
-            if let Some(ref results) = self.state.search_results {
+            // Try to get track from search results first
+            let track = if let Some(ref results) = self.state.search_results {
                 if let Some(ref tracks) = results.tracks {
-                    if let Some(track) = tracks.items.get(selected) {
-                        self.state.current_track = Some(track.clone());
+                    tracks.items.get(selected).cloned()
+                } else {
+                    None
+                }
+            } else {
+                // Otherwise get from recently played
+                self.state.recently_played.get(selected).cloned()
+            };
 
-                        if self.state.user_authenticated {
-                            self.state.is_playing = true;
-                            self.state.auth_message = "🎵 Playing track!".to_string();
-                            // In a real implementation, this would call spotify_client.play_track(&track.uri)
-                        } else {
-                            self.state.is_playing = false;
-                            self.state.auth_message = "🔒 Track selected! Authenticate to play.".to_string();
-                        }
-                    }
+            if let Some(track) = track {
+                self.state.current_track = Some(track.clone());
+
+                if self.state.user_authenticated {
+                    self.state.is_playing = true;
+                    self.state.auth_message = "🎵 Playing track!".to_string();
+                    // In a real implementation, this would call spotify_client.play_track(&track.uri)
+                } else {
+                    self.state.is_playing = false;
+                    self.state.auth_message = "🔒 Track selected! Authenticate to play.".to_string();
                 }
             }
         }
@@ -203,7 +211,15 @@ impl App {
                             }
                         }
                         KeyCode::Esc => {
-                            self.input_mode = false;
+                            if self.input_mode {
+                                self.input_mode = false;
+                            } else {
+                                // Clear search results to show recently played
+                                self.state.search_results = None;
+                                self.state.search_query.clear();
+                                self.list_state.select(Some(0));
+                                self.state.auth_message.clear();
+                            }
                         }
                         KeyCode::Char(c) => {
                             if self.input_mode {
@@ -302,8 +318,14 @@ impl App {
                 if let Some(ref results) = self.state.search_results {
                     if let Some(ref tracks) = results.tracks {
                         tracks.items.len()
-                    } else { 0 }
-                } else { 0 }
+                    } else {
+                        // Show recently played if no search results
+                        self.state.recently_played.len()
+                    }
+                } else {
+                    // Show recently played by default
+                    self.state.recently_played.len()
+                }
             }
             ViewType::Playlists => self.state.user_playlists.len(),
             ViewType::Albums => self.state.user_albums.len(),
@@ -417,8 +439,9 @@ impl App {
 
         f.render_widget(search_input, search_chunks[0]);
 
-        // Search results
+        // Show tracks - either search results or recently played
         if let Some(ref results) = self.state.search_results {
+            // Show search results
             if let Some(ref tracks) = results.tracks {
                 let track_items: Vec<ListItem> = tracks
                     .items
@@ -438,38 +461,39 @@ impl App {
                     .collect();
 
                 let tracks_list = List::new(track_items)
-                    .block(Block::default().title("Songs (↑↓ to navigate, Enter to play)").borders(Borders::ALL))
+                    .block(Block::default().title("🔍 Search Results (↑↓ to navigate, Enter to play)").borders(Borders::ALL))
                     .style(Style::default().fg(Color::White))
                     .highlight_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Black).bg(Color::White));
 
                 f.render_stateful_widget(tracks_list, search_chunks[1], &mut self.list_state);
             }
-        } else if !self.state.search_query.is_empty() {
-            // Show "searching" message
+        } else if !self.state.search_query.is_empty() && self.input_mode {
+            // Show "type to search" when in input mode
             let searching_text = Paragraph::new("🔍 Type your search and press Enter...")
-                .block(Block::default().title("Songs").borders(Borders::ALL));
+                .block(Block::default().title("Search").borders(Borders::ALL));
             f.render_widget(searching_text, search_chunks[1]);
         } else {
-            // Show sample search results like in the image
-            let sample_tracks = vec![
-                ListItem::new("Nothing Else Matters - Metallica"),
-                ListItem::new("Master Of Puppets - Metallica"),
-                ListItem::new("One - Metallica"),
-                ListItem::new("For Whom The Bell Tolls - Remastered - Metallica"),
-                ListItem::new("Enter Sandman - Metallica"),
-                ListItem::new("The Unforgiven - Metallica"),
-                ListItem::new("Sad But True - Metallica"),
-                ListItem::new("Fade To Black - Remastered - Metallica"),
-                ListItem::new("Seek & Destroy - Remastered - Metallica"),
-                ListItem::new("Wherever I May Roam - Metallica"),
-                ListItem::new("Battery - Metallica"),
-                ListItem::new("Hardwired - Metallica"),
-            ];
+            // Show recently played tracks when not searching
+            let recent_items: Vec<ListItem> = self.state.recently_played
+                .iter()
+                .enumerate()
+                .map(|(i, track)| {
+                    let artist_names: String = track
+                        .artists
+                        .iter()
+                        .map(|a| a.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ");
 
-            let tracks_list = List::new(sample_tracks)
-                .block(Block::default().title("Songs").borders(Borders::ALL))
+                    let item_text = format!("{}. {} - {}", i + 1, track.name, artist_names);
+                    ListItem::new(item_text)
+                })
+                .collect();
+
+            let tracks_list = List::new(recent_items)
+                .block(Block::default().title("🎵 Recently Played (↑↓ to navigate, Enter to play)").borders(Borders::ALL))
                 .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+                .highlight_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Black).bg(Color::White));
 
             f.render_stateful_widget(tracks_list, search_chunks[1], &mut self.list_state);
         }

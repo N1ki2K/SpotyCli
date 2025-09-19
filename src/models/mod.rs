@@ -158,6 +158,7 @@ pub struct AppState {
     pub user_playlists: Vec<Playlist>,
     pub user_albums: Vec<Album>,
     pub user_artists: Vec<Artist>,
+    pub recently_played: Vec<Track>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -187,6 +188,87 @@ impl Default for AppState {
             user_playlists: Vec::new(),
             user_albums: Vec::new(),
             user_artists: Vec::new(),
+            recently_played: create_sample_recent_tracks(),
         }
     }
+}
+
+fn create_sample_recent_tracks() -> Vec<Track> {
+    vec![
+        Track {
+            id: "recent1".to_string(),
+            name: "Nothing Else Matters".to_string(),
+            uri: "spotify:track:recent1".to_string(),
+            artists: vec![Artist {
+                id: "metallica".to_string(),
+                name: "Metallica".to_string(),
+                genres: None,
+                popularity: None,
+            }],
+            album: None,
+            duration_ms: 387000,
+            popularity: 95,
+            preview_url: None,
+        },
+        Track {
+            id: "recent2".to_string(),
+            name: "Enter Sandman".to_string(),
+            uri: "spotify:track:recent2".to_string(),
+            artists: vec![Artist {
+                id: "metallica".to_string(),
+                name: "Metallica".to_string(),
+                genres: None,
+                popularity: None,
+            }],
+            album: None,
+            duration_ms: 331000,
+            popularity: 98,
+            preview_url: None,
+        },
+        Track {
+            id: "recent3".to_string(),
+            name: "Master of Puppets".to_string(),
+            uri: "spotify:track:recent3".to_string(),
+            artists: vec![Artist {
+                id: "metallica".to_string(),
+                name: "Metallica".to_string(),
+                genres: None,
+                popularity: None,
+            }],
+            album: None,
+            duration_ms: 515000,
+            popularity: 92,
+            preview_url: None,
+        },
+        Track {
+            id: "recent4".to_string(),
+            name: "One".to_string(),
+            uri: "spotify:track:recent4".to_string(),
+            artists: vec![Artist {
+                id: "metallica".to_string(),
+                name: "Metallica".to_string(),
+                genres: None,
+                popularity: None,
+            }],
+            album: None,
+            duration_ms: 446000,
+            popularity: 90,
+            preview_url: None,
+        },
+        Track {
+            id: "recent5".to_string(),
+            name: "For Whom the Bell Tolls".to_string(),
+            uri: "spotify:track:recent5".to_string(),
+            artists: vec![Artist {
+                id: "metallica".to_string(),
+                name: "Metallica".to_string(),
+                genres: None,
+                popularity: None,
+            }],
+            album: None,
+            duration_ms: 309000,
+            popularity: 88,
+            preview_url: None,
+        },
+    ]
 }
