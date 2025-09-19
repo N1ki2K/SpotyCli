@@ -24,6 +24,7 @@ struct TokenResponse {
     refresh_token: Option<String>,
     expires_in: u64,
     scope: String,
+    #[allow(dead_code)]
     token_type: String,
 }
 
