@@ -190,6 +190,8 @@ async fn main() -> Result<()> {
         app.load_user_playlists().await;
         app.load_recently_played_from_spotify().await;
         app.load_liked_songs().await;
+        // Sync current playback state
+        app.sync_playback_state().await;
     }
 
     let result = app.run(&mut terminal).await;

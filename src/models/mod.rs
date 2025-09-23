@@ -254,6 +254,13 @@ impl RecentlyPlayedStorage {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ShuffleMode {
+    Off,
+    On,
+    SmartShuffle,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub current_view: ViewType,
@@ -268,6 +275,7 @@ pub struct AppState {
     pub auth_message: String,
     #[allow(dead_code)]
     pub volume: u8,
+    pub shuffle_mode: ShuffleMode,
     pub user_playlists: Vec<Playlist>,
     pub selected_playlist: Option<Playlist>,
     pub selected_playlist_tracks: Vec<Track>,
@@ -283,7 +291,7 @@ pub struct AppState {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewType {
     Search,
-    Library,
+    LikedSongs,
     Playlists,
     PlaylistTracks,
     Queue,
@@ -314,6 +322,7 @@ impl Default for AppState {
             user_authenticated: false,
             auth_message: String::new(),
             volume: 80,
+            shuffle_mode: ShuffleMode::Off,
             user_playlists: Vec::new(),
             selected_playlist: None,
             selected_playlist_tracks: Vec::new(),

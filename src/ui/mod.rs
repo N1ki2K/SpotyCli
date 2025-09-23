@@ -14,7 +14,7 @@ use ratatui::{
 };
 use std::io;
 
-use crate::models::{AppState, ViewType};
+use crate::models::{AppState, ViewType, ShuffleMode};
 use crate::api::SpotifyClient;
 use crate::auth::SpotifyAuth;
 
@@ -313,7 +313,7 @@ impl App {
                         None
                     }
                 }
-                ViewType::Library => {
+                ViewType::LikedSongs => {
                     if !self.state.liked_songs.is_empty() {
                         // Use actual liked songs
                         if selected < self.state.liked_songs.len() {
@@ -355,7 +355,7 @@ impl App {
                                     client.play_track(&track.uri).await
                                 }
                             }
-                            ViewType::Library => {
+                            ViewType::LikedSongs => {
                                 // Play liked songs with context
                                 let track_uris: Vec<String> = self.state.liked_songs.iter()
                                     .map(|t| t.uri.clone())
@@ -478,6 +478,167 @@ impl App {
         }
     }
 
+    async fn toggle_shuffle(&mut self) {
+        if self.state.user_authenticated {
+            if let Some(ref client) = self.spotify_client {
+                // Cycle through: Off -> On -> SmartShuffle -> Off
+                let (new_mode, result) = match self.state.shuffle_mode {
+                    ShuffleMode::Off => {
+                        (ShuffleMode::On, client.set_shuffle(true).await)
+                    }
+                    ShuffleMode::On => {
+                        (ShuffleMode::SmartShuffle, client.set_smart_shuffle(true).await)
+                    }
+                    ShuffleMode::SmartShuffle => {
+                        (ShuffleMode::Off, client.set_shuffle(false).await)
+                    }
+                };
+
+                match result {
+                    Ok(_) => {
+                        self.state.shuffle_mode = new_mode.clone();
+                        let mode_text = match new_mode {
+                            ShuffleMode::Off => "🔀 Shuffle: Off",
+                            ShuffleMode::On => "🔀 Shuffle: On",
+                            ShuffleMode::SmartShuffle => "🔀 Smart Shuffle: On",
+                        };
+                        self.state.auth_message = mode_text.to_string();
+
+                        // Sync after a short delay
+                        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+                        self.sync_playback_state().await;
+                    },
+                    Err(e) => {
+                        self.log_error(format!("❌ SHUFFLE ERROR: {}", e));
+                        let error_msg = e.to_string();
+                        if error_msg.contains("NO_ACTIVE_DEVICE") {
+                            self.state.auth_message = "❌ No active device! Open Spotify app first.".to_string();
+                        } else if error_msg.contains("PREMIUM_REQUIRED") {
+                            self.state.auth_message = "❌ Spotify Premium required for shuffle control.".to_string();
+                        } else {
+                            self.state.auth_message = format!("❌ Shuffle error: {}", e);
+                        }
+                    }
+                }
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required for shuffle control".to_string();
+        }
+    }
+
+    async fn toggle_like_selected_track(&mut self) {
+        let user_authenticated = self.state.user_authenticated;
+        let current_view = self.state.current_view.clone();
+        let selected = self.list_state.selected();
+
+        if let Some(selected) = selected {
+            let track = match current_view {
+                ViewType::Search => {
+                    if let Some(ref search_results) = self.state.search_results {
+                        if let Some(ref tracks) = search_results.tracks {
+                            if selected < tracks.items.len() {
+                                Some(tracks.items[selected].clone())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        if selected < self.state.recently_played.len() {
+                            Some(self.state.recently_played[selected].clone())
+                        } else {
+                            None
+                        }
+                    }
+                }
+                ViewType::PlaylistTracks => {
+                    if selected < self.state.selected_playlist_tracks.len() {
+                        Some(self.state.selected_playlist_tracks[selected].clone())
+                    } else {
+                        None
+                    }
+                }
+                ViewType::LikedSongs => {
+                    if !self.state.liked_songs.is_empty() {
+                        if selected < self.state.liked_songs.len() {
+                            Some(self.state.liked_songs[selected].clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        if selected < self.state.recently_played.len() {
+                            Some(self.state.recently_played[selected].clone())
+                        } else {
+                            None
+                        }
+                    }
+                }
+                ViewType::Queue => {
+                    if selected < self.state.queue.len() {
+                        Some(self.state.queue[selected].clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => {
+                    if selected < self.state.recently_played.len() {
+                        Some(self.state.recently_played[selected].clone())
+                    } else {
+                        None
+                    }
+                }
+            };
+
+            if let Some(track) = track {
+                if user_authenticated {
+                    if let Some(client) = self.spotify_client.clone() {
+                        // First check if the track is already liked
+                        match client.check_if_liked(&track.id).await {
+                            Ok(is_liked) => {
+                                let result = if is_liked {
+                                    client.unlike_song(&track.id).await
+                                } else {
+                                    client.like_song(&track.id).await
+                                };
+
+                                match result {
+                                    Ok(_) => {
+                                        let action = if is_liked { "💔 Removed from" } else { "❤️ Added to" };
+                                        self.state.auth_message = format!("{} liked songs: {}", action, track.name);
+
+                                        // If we're in liked songs view and we just unliked, refresh the list
+                                        if is_liked && current_view == ViewType::LikedSongs {
+                                            self.load_liked_songs().await;
+                                        }
+                                    },
+                                    Err(e) => {
+                                        self.log_error(format!("❌ LIKE ERROR: {}", e));
+                                        let error_msg = e.to_string();
+                                        if error_msg.contains("PREMIUM_REQUIRED") {
+                                            self.state.auth_message = "❌ Spotify Premium required for liking songs.".to_string();
+                                        } else {
+                                            self.state.auth_message = format!("❌ Like error: {}", e);
+                                        }
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                self.log_error(format!("❌ LIKE CHECK ERROR: {}", e));
+                                self.state.auth_message = format!("❌ Error checking like status: {}", e);
+                            }
+                        }
+                    }
+                } else {
+                    self.state.auth_message = "❌ Authentication required for liking songs".to_string();
+                }
+            } else {
+                self.state.auth_message = "❌ No track selected".to_string();
+            }
+        } else {
+            self.state.auth_message = "❌ No track selected".to_string();
+        }
+    }
 
     fn log_error(&mut self, message: String) {
         let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
@@ -523,7 +684,7 @@ impl App {
                         None
                     }
                 }
-                ViewType::Library => {
+                ViewType::LikedSongs => {
                     if !self.state.liked_songs.is_empty() {
                         // Use actual liked songs
                         if selected < self.state.liked_songs.len() {
@@ -585,27 +746,43 @@ impl App {
     }
 
     async fn adjust_volume(&mut self, delta: i8) {
+        self.log_error(format!("Volume adjust called: delta={}, user_auth={}", delta, self.state.user_authenticated));
+
         if self.state.user_authenticated {
-            if let Some(ref client) = self.spotify_client {
+            if let Some(client) = self.spotify_client.clone() {
                 // First, try to get current volume from Spotify
                 let current_volume = if let Ok(Some(playback)) = client.get_current_playback().await {
                     if let Some(volume) = playback.device.volume_percent {
+                        self.log_error(format!("Got current volume from device: {}%", volume));
                         volume
                     } else {
+                        self.log_error("Device has no volume info, using stored volume".to_string());
                         self.state.volume // fallback to stored volume
                     }
                 } else {
+                    self.log_error("Failed to get playback info, using stored volume".to_string());
                     self.state.volume // fallback to stored volume
                 };
 
                 let new_volume = (current_volume as i16 + delta as i16).clamp(0, 100) as u8;
+                self.log_error(format!("Volume change: {} -> {} (delta: {})", current_volume, new_volume, delta));
 
                 match client.set_volume(new_volume).await {
                     Ok(_) => {
+                        self.log_error(format!("✅ Volume API call successful: set to {}%", new_volume));
                         self.state.volume = new_volume;
-                        self.state.auth_message = format!("🔊 Volume: {}%", new_volume);
+                        self.state.auth_message = format!("🔊 Volume: {}% ({}{})",
+                            new_volume,
+                            if delta > 0 { "+" } else { "" },
+                            delta
+                        );
+
+                        // Sync after volume change to update display
+                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                        self.sync_playback_state().await;
                     },
                     Err(e) => {
+                        self.log_error(format!("❌ Volume API call failed: {}", e));
                         let error_msg = e.to_string();
                         if error_msg.contains("NO_ACTIVE_DEVICE") {
                             self.state.auth_message = "❌ No active device! Open Spotify app first.".to_string();
@@ -620,11 +797,11 @@ impl App {
                 self.state.auth_message = "❌ No Spotify client available".to_string();
             }
         } else {
-            self.state.auth_message = "❌ Authentication required for volume control".to_string();
+            self.state.auth_message = "❌ User authentication required for volume control".to_string();
         }
     }
 
-    async fn sync_playback_state(&mut self) {
+    pub async fn sync_playback_state(&mut self) {
         if self.state.user_authenticated {
             if let Some(ref client) = self.spotify_client {
                 match client.get_current_playback().await {
@@ -632,19 +809,26 @@ impl App {
                         self.state.current_playback = Some(playback.clone());
                         self.state.is_playing = playback.is_playing;
 
+                        // Debug info about progress data
+                        let progress_info = if let Some(progress_ms) = playback.progress_ms {
+                            format!(" [✅Progress: {}ms]", progress_ms)
+                        } else {
+                            " [❌No Progress Data]".to_string()
+                        };
+
                         if let Some(track) = playback.item {
                             self.state.current_track = Some(track.clone());
                             if playback.is_playing {
-                                self.state.auth_message = format!("▶ Now Playing: {}", track.name);
+                                self.state.auth_message = format!("✅ Playing: {}{}", track.name, progress_info);
                             } else {
-                                self.state.auth_message = format!("⏸️ Paused: {}", track.name);
+                                self.state.auth_message = format!("✅ Paused: {}{}", track.name, progress_info);
                             }
                         } else {
                             self.state.current_track = None;
                             self.state.auth_message = if playback.is_playing {
-                                "▶ Playing...".to_string()
+                                format!("✅ SYNC SUCCESS: ▶ Playing...{}", progress_info)
                             } else {
-                                "⏸️ Paused".to_string()
+                                format!("✅ SYNC SUCCESS: ⏸️ Paused{}", progress_info)
                             };
                         }
                     }
@@ -653,10 +837,11 @@ impl App {
                         self.state.current_playback = None;
                         self.state.is_playing = false;
                         self.state.current_track = None;
-                        self.state.auth_message = "⏹️ No active playback".to_string();
+                        self.state.auth_message = "⏹️ No active playback - start playing on Spotify first".to_string();
                     }
                     Err(e) => {
                         self.log_error(format!("❌ SYNC ERROR: {}", e));
+                        self.state.auth_message = format!("❌ Sync failed: {}", e);
                     }
                 }
             }
@@ -664,10 +849,22 @@ impl App {
     }
 
     pub async fn run<B: ratatui::backend::Backend>(&mut self, terminal: &mut Terminal<B>) -> io::Result<()> {
+        use std::time::{Duration, Instant};
+        let mut last_sync = Instant::now();
+        let sync_interval = Duration::from_secs(3); // Sync every 3 seconds
+
         loop {
             terminal.draw(|f| self.ui(f))?;
 
-            if let Event::Key(key) = event::read()? {
+            // Auto-sync every 3 seconds if playing
+            if self.state.is_playing && self.state.user_authenticated && last_sync.elapsed() >= sync_interval {
+                self.sync_playback_state().await;
+                last_sync = Instant::now();
+            }
+
+            // Poll for events with timeout to allow periodic syncing
+            if event::poll(Duration::from_millis(100))? {
+                if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
                         KeyCode::Char('q') => return Ok(()),
@@ -718,7 +915,7 @@ impl App {
                                             self.state.recently_played.len()
                                         }
                                     }
-                                    ViewType::Library => {
+                                    ViewType::LikedSongs => {
                                         if !self.state.liked_songs.is_empty() {
                                             self.state.liked_songs.len()
                                         } else {
@@ -799,7 +996,7 @@ impl App {
                                         self.list_state.select(Some(0));
                                     }
                                     '2' => {
-                                        self.state.current_view = ViewType::Library;
+                                        self.state.current_view = ViewType::LikedSongs;
                                         self.state.auth_message.clear();
                                         self.list_state.select(Some(0));
                                     }
@@ -833,40 +1030,46 @@ impl App {
                                     ' ' => {
                                         self.toggle_playback().await;
                                     }
-                                    'u' => {
+                                    'u' | 'U' => {
                                         self.authenticate_user().await;
                                     }
-                                    'r' => {
+                                    'r' | 'R' => {
                                         self.load_recently_played_from_spotify().await;
                                     }
-                                    'P' => {
-                                        self.load_user_playlists().await;
-                                    }
-                                    'L' => {
+                                    'L' | 'l' => {
                                         self.load_liked_songs().await;
                                     }
-                                    'Q' => {
+                                    'Q' | 'q' => {
                                         self.load_queue().await;
                                     }
-                                    'n' => {
+                                    'n' | 'N' => {
                                         self.next_track().await;
                                     }
-                                    'p' => {
+                                    'b' | 'B' => {
                                         self.previous_track().await;
                                     }
-                                    '+' => {
+                                    'P' | 'p' => {
+                                        self.toggle_shuffle().await;
+                                    }
+                                    '+' | '=' => {
+                                        self.state.auth_message = "🔊 Volume Up pressed...".to_string();
                                         self.volume_up().await;
                                     }
-                                    '-' => {
+                                    '-' | '_' => {
+                                        self.state.auth_message = "🔉 Volume Down pressed...".to_string();
                                         self.volume_down().await;
                                     }
-                                    'm' => {
+                                    'm' | 'M' => {
                                         self.log_error("🎵 'm' key pressed - adding selected track to queue".to_string());
                                         self.add_selected_to_queue().await;
                                     }
-                                    's' => {
+                                    's' | 'S' => {
+                                        self.state.auth_message = "🔄 Syncing with Spotify...".to_string();
                                         self.log_error("🔄 's' key pressed - syncing playback state".to_string());
                                         self.sync_playback_state().await;
+                                    }
+                                    ')' => {
+                                        self.toggle_like_selected_track().await;
                                     }
                                     _ => {
                                         self.state.auth_message.clear();
@@ -883,13 +1086,14 @@ impl App {
                     }
                 }
             }
+            }
         }
     }
 
     async fn switch_tab(&mut self, direction: i32) {
         let tabs = [
             ViewType::Search,
-            ViewType::Library,
+            ViewType::LikedSongs,
             ViewType::Playlists,
             ViewType::Queue,
             ViewType::Albums,
@@ -947,7 +1151,7 @@ impl App {
         // Navigation section
         let library_items = vec![
             ListItem::new("1. Search"),
-            ListItem::new("2. Library"),
+            ListItem::new("2. Liked Songs"),
             ListItem::new("3. Playlists"),
             ListItem::new("4. Queue"),
             ListItem::new("5. Albums"),
@@ -998,7 +1202,7 @@ impl App {
     fn render_main_content(&mut self, f: &mut Frame, area: Rect) {
         match self.state.current_view {
             ViewType::Search => self.render_search(f, area),
-            ViewType::Library => self.render_library(f, area),
+            ViewType::LikedSongs => self.render_library(f, area),
             ViewType::Playlists => self.render_playlists(f, area),
             ViewType::PlaylistTracks => self.render_playlist_tracks(f, area),
             ViewType::Queue => self.render_queue(f, area),
@@ -1127,7 +1331,7 @@ impl App {
                 let duration_seconds = track.duration_ms / 1000;
                 let duration_formatted = format!("{}:{:02}", duration_seconds / 60, duration_seconds % 60);
 
-                format!(
+                let mut preview_info = format!(
                     "🎵 {}\n\n👤 Artist(s):\n{}\n\n💿 Album:\n{}\n\n⏱️ Duration:\n{}\n\n🎚️ Popularity:\n{}/100\n\n🆔 Track ID:\n{}",
                     track.name,
                     artist_names,
@@ -1135,7 +1339,65 @@ impl App {
                     duration_formatted,
                     track.popularity,
                     track.id
-                )
+                );
+
+                // Always add a progress section at the very bottom
+                preview_info.push_str("\n\n\n═══ PLAYBACK STATUS ═══");
+
+                // Check if this track is currently playing and add progress info
+                if let Some(ref current_track) = self.state.current_track {
+                    if current_track.id == track.id {
+                        preview_info.push_str("\n🎵 CURRENTLY PLAYING 🎵");
+
+                        if let Some(ref playback) = self.state.current_playback {
+                            let status_icon = if playback.is_playing { "▶" } else { "⏸️" };
+                            preview_info.push_str(&format!("\n{} Status: {}", status_icon,
+                                if playback.is_playing { "Playing" } else { "Paused" }));
+
+                            // Add progress info
+                            if let Some(progress_ms) = playback.progress_ms {
+                                let progress_sec = progress_ms / 1000;
+                                let progress_min = progress_sec / 60;
+                                let progress_sec_remainder = progress_sec % 60;
+                                let duration_min = duration_seconds / 60;
+                                let duration_sec_remainder = duration_seconds % 60;
+
+                                preview_info.push_str(&format!("\n⏱️ Progress: {}:{:02} / {}:{:02}",
+                                    progress_min, progress_sec_remainder,
+                                    duration_min, duration_sec_remainder));
+
+                                // Add progress bar
+                                let progress_percentage = (progress_ms as f64 / track.duration_ms as f64 * 100.0) as u8;
+                                let bar_width = 20; // Bigger bar for better visibility
+                                let filled = (progress_percentage as f64 / 100.0 * bar_width as f64) as usize;
+                                let bar = "█".repeat(filled) + &"░".repeat(bar_width - filled);
+                                preview_info.push_str(&format!("\n[{}] {}%", bar, progress_percentage));
+                            } else {
+                                preview_info.push_str("\n⏱️ Progress: Unavailable");
+                                let bar = "░".repeat(20);
+                                preview_info.push_str(&format!("\n[{}] No data", bar));
+                            }
+
+                            preview_info.push_str(&format!("\n🎧 Device: {}", playback.device.name));
+                            preview_info.push_str("\n═════════════════════");
+                        } else {
+                            preview_info.push_str("\n❌ No playback data");
+                            preview_info.push_str("\n═════════════════════");
+                        }
+                    } else {
+                        preview_info.push_str("\n⏹️ Not currently playing");
+                        preview_info.push_str("\n💡 Press 's' to sync, then");
+                        preview_info.push_str("\n   select the playing track");
+                        preview_info.push_str("\n═════════════════════");
+                    }
+                } else {
+                    preview_info.push_str("\n⏹️ No active playback");
+                    preview_info.push_str("\n💡 Start music on Spotify");
+                    preview_info.push_str("\n   then press 's' to sync");
+                    preview_info.push_str("\n═════════════════════");
+                }
+
+                preview_info
             } else {
                 "No track selected".to_string()
             }
@@ -1373,7 +1635,7 @@ impl App {
             ])
             .split(area);
 
-        // Current track info
+        // Current track info with enhanced details
         let track_info = if let Some(ref track) = self.state.current_track {
             let artist_names: String = track
                 .artists
@@ -1381,12 +1643,82 @@ impl App {
                 .map(|a| a.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("🎵 {} - {}\n{}\n{}", track.name, artist_names,
-                if self.state.user_authenticated { "✅ Authenticated" } else { "❌ Not authenticated" },
-                if !self.state.auth_message.is_empty() { &self.state.auth_message } else { "" })
+
+            let mut info = format!("🎵 {} - {}", track.name, artist_names);
+
+            // Add album info if available
+            if let Some(ref album) = track.album {
+                info.push_str(&format!("\n💿 Album: {}", album.name));
+            }
+
+            // Add playback status and progress if available
+            if let Some(ref playback) = self.state.current_playback {
+                let status_icon = if playback.is_playing { "▶" } else { "⏸️" };
+                info.push_str(&format!("\n{} Status: {}", status_icon,
+                    if playback.is_playing { "Playing" } else { "Paused" }));
+
+                // Add progress info - always show something
+                if let Some(progress_ms) = playback.progress_ms {
+                    let duration_ms = track.duration_ms;
+                    let progress_sec = progress_ms / 1000;
+                    let duration_sec = duration_ms / 1000;
+                    let progress_min = progress_sec / 60;
+                    let progress_sec_remainder = progress_sec % 60;
+                    let duration_min = duration_sec / 60;
+                    let duration_sec_remainder = duration_sec % 60;
+
+                    info.push_str(&format!("\n⏱️  Progress: {}:{:02} / {}:{:02}",
+                        progress_min, progress_sec_remainder,
+                        duration_min, duration_sec_remainder));
+
+                    // Add progress bar
+                    let progress_percentage = (progress_ms as f64 / duration_ms as f64 * 100.0) as u8;
+                    let bar_width = 20;
+                    let filled = (progress_percentage as f64 / 100.0 * bar_width as f64) as usize;
+                    let bar = "█".repeat(filled) + &"░".repeat(bar_width - filled);
+                    info.push_str(&format!("\n[{}] {}%", bar, progress_percentage));
+                } else {
+                    // Show duration even if no progress data
+                    let duration_sec = track.duration_ms / 1000;
+                    let duration_min = duration_sec / 60;
+                    let duration_sec_remainder = duration_sec % 60;
+                    info.push_str(&format!("\n⏱️  Duration: {}:{:02} (Progress unavailable)",
+                        duration_min, duration_sec_remainder));
+
+                    // Show empty progress bar
+                    let bar = "░".repeat(20);
+                    info.push_str(&format!("\n[{}] No progress data", bar));
+                }
+
+                // Add device info
+                info.push_str(&format!("\n🎧 Device: {}", playback.device.name));
+
+                // Add shuffle/repeat status
+                if playback.shuffle_state {
+                    info.push_str(" 🔀");
+                }
+                match playback.repeat_state.as_str() {
+                    "track" => info.push_str(" 🔂"),
+                    "context" => info.push_str(" 🔁"),
+                    _ => {}
+                }
+            } else {
+                info.push_str(&format!("\n{} Status: {}",
+                    if self.state.is_playing { "▶" } else { "⏸️" },
+                    if self.state.is_playing { "Playing" } else { "Paused" }));
+            }
+
+            info.push_str(&format!("\n{}",
+                if self.state.user_authenticated { "✅ Authenticated" } else { "❌ Not authenticated" }));
+
+            if !self.state.auth_message.is_empty() {
+                info.push_str(&format!("\n{}", self.state.auth_message));
+            }
+
+            info
         } else {
             format!("No track playing\n{}\n{}",
-                if self.state.user_authenticated { "✅ Authenticated for playback" } else { "❌ Press 'u' to authenticate" },
+                if self.state.user_authenticated { "✅ Authenticated for playback" } else { "❌ Press 's' to sync or 'u' to authenticate" },
                 if !self.state.auth_message.is_empty() { &self.state.auth_message } else { "" })
         };
 
@@ -1397,7 +1729,12 @@ impl App {
 
         // Player controls
         let play_status = if self.state.is_playing { "⏸ Pause" } else { "▶ Play" };
-        let controls = format!("⏮ Prev | {} | Next ⏭\n\nControls:\nEnter: Play | m: Add Selected to Queue\nSpace: Play/Pause | /: Search | ↑↓: Navigate\nn: Next | p: Previous | Alt+R: Prev | Alt+T: Next | q: Quit\n+/-: Volume | u: Auth | r: Refresh Recent | P: Refresh Playlists | L: Load Liked Songs | Q: Refresh Queue\n1-7: Switch Views | Ctrl+←→: Switch Tabs (7=Errors/Logs)", play_status);
+        let shuffle_icon = match self.state.shuffle_mode {
+            ShuffleMode::Off => "",
+            ShuffleMode::On => " 🔀",
+            ShuffleMode::SmartShuffle => " 🔀✨",
+        };
+        let controls = format!("⏮ Prev | {} | Next ⏭{}\n\nControls:\nEnter: Play | m: Add to Queue | s: Sync | P: Shuffle\nSpace: Play/Pause | /: Search | ↑↓: Navigate\nn: Next | p: Previous | Alt+R: Prev | Alt+T: Next | q: Quit\n+/-: Volume | u: Auth | r: Refresh Recent | L: Load Liked Songs | Q: Refresh Queue\n1-7: Switch Views | Ctrl+←→: Switch Tabs (7=Errors/Logs)", play_status, shuffle_icon);
         let controls_color = if self.state.user_authenticated { Color::Green } else { Color::Yellow };
         let controls_widget = Paragraph::new(controls)
             .block(Block::default().borders(Borders::ALL).title("Controls"))
@@ -1406,13 +1743,21 @@ impl App {
         f.render_widget(controls_widget, player_chunks[1]);
 
         // Volume and status
-        let status_info = format!("Volume: {}%\nStatus: {}\nMode: {}",
+        let mut status_info = format!("Volume: {}%\nStatus: {}\nMode: {}",
             self.state.volume,
             if self.state.is_playing { "Playing" } else { "Paused" },
             if self.state.user_authenticated { "Premium" } else { "Browse Only" }
         );
+
+        // Add auth message (always show something for testing)
+        if !self.state.auth_message.is_empty() {
+            status_info.push_str(&format!("\n\nMESSAGE: {}", self.state.auth_message));
+        } else {
+            status_info.push_str("\n\nTEST: Press 's' to sync");
+        }
         let status_widget = Paragraph::new(status_info)
-            .block(Block::default().borders(Borders::ALL).title("Status"));
+            .block(Block::default().borders(Borders::ALL).title("Status"))
+            .wrap(Wrap { trim: true });
 
         f.render_widget(status_widget, player_chunks[2]);
     }

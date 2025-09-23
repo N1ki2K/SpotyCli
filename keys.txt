@@ -1,0 +1,49 @@
+SpotyCli - Keyboard Controls
+==============================
+
+Navigation:
+-----------
+↑/↓        - Navigate up/down in lists
+←/→        - Switch between tabs
+Tab        - Switch between tabs (forward)
+1-6        - Quick jump to tabs (1=Search, 2=Liked Songs, 3=Playlists, 4=Queue, 5=Albums, 6=Artists)
+
+Search & Input:
+--------------
+/          - Start search (enter text input mode)
+Enter      - Submit search / Play selected track
+Escape     - Exit search input mode
+Backspace  - Delete character in search mode
+
+Playback Controls:
+-----------------
+Space      - Play/Pause current track
+N/n        - Next track
+B/b        - Previous track (back)
+P/p        - Toggle shuffle (Off → On → Smart Shuffle → Off)
++ / =      - Volume up (+10%)
+- / _      - Volume down (-10%)
+
+Track Actions:
+-------------
+M/m        - Add selected track to queue
+)          - Like/Unlike selected track (toggle)
+
+Data Loading:
+------------
+U/u        - Authenticate user (enable playback features)
+R/r        - Reload recently played tracks from Spotify
+L/l        - Load liked songs
+Q/q        - Load queue
+S/s        - Sync playback state with Spotify
+
+System:
+-------
+Ctrl+C     - Quit application
+
+Notes:
+------
+- All letter keys work in both uppercase and lowercase
+- Authentication is required for playback controls and some features
+- Premium Spotify account required for full playback control
+- Active Spotify device needed for playback operations

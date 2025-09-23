@@ -2,103 +2,103 @@
   "tracks": [
     {
       "track": {
-        "id": "2d4e45fmUnguxh6yqC7gNT",
-        "name": "Dirty Deeds Done Dirt Cheap",
-        "uri": "spotify:track:2d4e45fmUnguxh6yqC7gNT",
+        "id": "2dXsILW8gzkosqleHAvl0v",
+        "name": "For Whom The Bell Tolls - Remastered",
+        "uri": "spotify:track:2dXsILW8gzkosqleHAvl0v",
         "artists": [
           {
-            "id": "711MCceyCBcFnzjGY4Q7Un",
-            "name": "AC/DC",
+            "id": "2ye2Wgw4gimLv2eAKyk1NB",
+            "name": "Metallica",
             "genres": null,
             "popularity": null
           }
         ],
         "album": {
-          "id": "76mvVgXOde87B9aOzLXCOI",
-          "name": "Dirty Deeds Done Dirt Cheap",
+          "id": "05DePtm7oQMdL3Uzw2Jmsc",
+          "name": "Ride The Lightning (Remastered)",
           "artists": [
             {
-              "id": "711MCceyCBcFnzjGY4Q7Un",
-              "name": "AC/DC",
+              "id": "2ye2Wgw4gimLv2eAKyk1NB",
+              "name": "Metallica",
               "genres": null,
               "popularity": null
             }
           ],
-          "release_date": "1976-09-20",
-          "total_tracks": 9,
+          "release_date": "1984-07-27",
+          "total_tracks": 8,
           "images": [
             {
-              "url": "https://i.scdn.co/image/ab67616d0000b27368b03027356fb05501948f62",
+              "url": "https://i.scdn.co/image/ab67616d0000b2739ad3e9959f48d513886b8933",
               "height": 640,
               "width": 640
             },
             {
-              "url": "https://i.scdn.co/image/ab67616d00001e0268b03027356fb05501948f62",
+              "url": "https://i.scdn.co/image/ab67616d00001e029ad3e9959f48d513886b8933",
               "height": 300,
               "width": 300
             },
             {
-              "url": "https://i.scdn.co/image/ab67616d0000485168b03027356fb05501948f62",
+              "url": "https://i.scdn.co/image/ab67616d000048519ad3e9959f48d513886b8933",
               "height": 64,
               "width": 64
             }
           ]
         },
-        "duration_ms": 231933,
-        "popularity": 74,
+        "duration_ms": 309973,
+        "popularity": 68,
         "preview_url": null
       },
-      "played_at": "2025-09-23T13:40:09.950447906+00:00"
+      "played_at": "2025-09-23T17:23:29.824480550+00:00"
     },
     {
       "track": {
-        "id": "3MKhTroJs5GF9H7LqN9fiw",
-        "name": "Devil in Disguise",
-        "uri": "spotify:track:3MKhTroJs5GF9H7LqN9fiw",
+        "id": "55ikcenXPbQdzCnO1sOuYg",
+        "name": "I Was Made For Lovin’ You - from The Fall Guy",
+        "uri": "spotify:track:55ikcenXPbQdzCnO1sOuYg",
         "artists": [
           {
-            "id": "3HedFe4b2Nqeg1CEzmt6ZI",
-            "name": "Marino",
+            "id": "6Ad91Jof8Niiw0lGLLi3NW",
+            "name": "YUNGBLUD",
             "genres": null,
             "popularity": null
           }
         ],
         "album": {
-          "id": "3x72yJC4Ynj7UTJSjCMbTM",
-          "name": "Devil in Disguise",
+          "id": "1d3yldnlofPfWQHVAybQrZ",
+          "name": "I Was Made For Lovin' You (from The Fall Guy)",
           "artists": [
             {
-              "id": "3HedFe4b2Nqeg1CEzmt6ZI",
-              "name": "Marino",
+              "id": "6Ad91Jof8Niiw0lGLLi3NW",
+              "name": "YUNGBLUD",
               "genres": null,
               "popularity": null
             }
           ],
-          "release_date": "2025-07-18",
+          "release_date": "2024-04-26",
           "total_tracks": 1,
           "images": [
             {
-              "url": "https://i.scdn.co/image/ab67616d0000b273117ebf5e67defe3f175eaccc",
+              "url": "https://i.scdn.co/image/ab67616d0000b2732514a547c5433aceb34ea84b",
               "height": 640,
               "width": 640
             },
             {
-              "url": "https://i.scdn.co/image/ab67616d00001e02117ebf5e67defe3f175eaccc",
+              "url": "https://i.scdn.co/image/ab67616d00001e022514a547c5433aceb34ea84b",
               "height": 300,
               "width": 300
             },
             {
-              "url": "https://i.scdn.co/image/ab67616d00004851117ebf5e67defe3f175eaccc",
+              "url": "https://i.scdn.co/image/ab67616d000048512514a547c5433aceb34ea84b",
               "height": 64,
               "width": 64
             }
           ]
         },
-        "duration_ms": 104431,
-        "popularity": 86,
+        "duration_ms": 261519,
+        "popularity": 76,
         "preview_url": null
       },
-      "played_at": "2025-09-23T13:40:02.475789817+00:00"
+      "played_at": "2025-09-23T17:13:13.154318016+00:00"
     },
     {
       "track": {
@@ -160,7 +160,443 @@
         "popularity": 49,
         "preview_url": null
       },
-      "played_at": "2025-09-23T13:12:30.954059178+00:00"
+      "played_at": "2025-09-23T17:13:07.176657242+00:00"
+    },
+    {
+      "track": {
+        "id": "7zOEN0TLU0WCW5gOuTtn4G",
+        "name": "I Was Made For Loving You (Nightcore)",
+        "uri": "spotify:track:7zOEN0TLU0WCW5gOuTtn4G",
+        "artists": [
+          {
+            "id": "2QExgoGkxhdF9nEy1plnGz",
+            "name": "Nøvacore",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "3mdwKSW5vZ5gfBeU3eNYjM",
+          "name": "I Was Made For Loving You (Nightcore)",
+          "artists": [
+            {
+              "id": "2QExgoGkxhdF9nEy1plnGz",
+              "name": "Nøvacore",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "2023-12-01",
+          "total_tracks": 1,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b273002ff8171b4bb80e2a9648dc",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e02002ff8171b4bb80e2a9648dc",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00004851002ff8171b4bb80e2a9648dc",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 190978,
+        "popularity": 1,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T17:13:02.470631852+00:00"
+    },
+    {
+      "track": {
+        "id": "1CPZ5BxNNd0n0nF4Orb9JS",
+        "name": "Golden",
+        "uri": "spotify:track:1CPZ5BxNNd0n0nF4Orb9JS",
+        "artists": [
+          {
+            "id": "2yNNYQBChuox9A5Ka93BIn",
+            "name": "HUNTR/X",
+            "genres": null,
+            "popularity": null
+          },
+          {
+            "id": "0RMJOzHDhAKY1o2j0W0vxY",
+            "name": "EJAE",
+            "genres": null,
+            "popularity": null
+          },
+          {
+            "id": "0Wwji82sLA0Hcvtuak3omb",
+            "name": "AUDREY NUNA",
+            "genres": null,
+            "popularity": null
+          },
+          {
+            "id": "6U1dV7aL68N7Gb0Naq34V5",
+            "name": "REI AMI",
+            "genres": null,
+            "popularity": null
+          },
+          {
+            "id": "7mW7Tv7NvywKKXqafZo0Lc",
+            "name": "KPop Demon Hunters Cast",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "14JkAa6IiFaOh5s0nMyMU9",
+          "name": "KPop Demon Hunters (Soundtrack from the Netflix Film)",
+          "artists": [
+            {
+              "id": "7mW7Tv7NvywKKXqafZo0Lc",
+              "name": "KPop Demon Hunters Cast",
+              "genres": null,
+              "popularity": null
+            },
+            {
+              "id": "2yNNYQBChuox9A5Ka93BIn",
+              "name": "HUNTR/X",
+              "genres": null,
+              "popularity": null
+            },
+            {
+              "id": "0BJ2EjOqcfgFvlZXNKrNbE",
+              "name": "Saja Boys",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "2025-06-20",
+          "total_tracks": 12,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b2734dcb6c5df15cf74596ab25a4",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e024dcb6c5df15cf74596ab25a4",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d000048514dcb6c5df15cf74596ab25a4",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 194607,
+        "popularity": 100,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T17:09:47.409362367+00:00"
+    },
+    {
+      "track": {
+        "id": "6MDtS6MzlIzGUjbC1rapa4",
+        "name": "Free Fall (Theme From KinnPorsche The Series)",
+        "uri": "spotify:track:6MDtS6MzlIzGUjbC1rapa4",
+        "artists": [
+          {
+            "id": "6TNTFjkJA8PhP16Ds7CZnz",
+            "name": "Slot Machine",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "7svgXSmQuVYYecwHej48Pw",
+          "name": "Free Fall (Theme From KinnPorsche The Series)",
+          "artists": [
+            {
+              "id": "6TNTFjkJA8PhP16Ds7CZnz",
+              "name": "Slot Machine",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "2022-03-23",
+          "total_tracks": 1,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b2739a8e6b23948864e0f94eb21d",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e029a8e6b23948864e0f94eb21d",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d000048519a8e6b23948864e0f94eb21d",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 226046,
+        "popularity": 51,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T17:05:25.818328187+00:00"
+    },
+    {
+      "track": {
+        "id": "4XPXrcpyNr30Km6aPiflJy",
+        "name": "God’s Menu",
+        "uri": "spotify:track:4XPXrcpyNr30Km6aPiflJy",
+        "artists": [
+          {
+            "id": "2dIgFjalVxs4ThymZ67YCE",
+            "name": "Stray Kids",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "6DWLIzvmiLPAuDWYZqrLQo",
+          "name": "GO LIVE",
+          "artists": [
+            {
+              "id": "2dIgFjalVxs4ThymZ67YCE",
+              "name": "Stray Kids",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "2020-06-17",
+          "total_tracks": 14,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b273fad8c4176e8df7173479f959",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e02fad8c4176e8df7173479f959",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00004851fad8c4176e8df7173479f959",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 167922,
+        "popularity": 76,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T17:05:14.854764806+00:00"
+    },
+    {
+      "track": {
+        "id": "08H8CT32rALUZvL8TE4ruD",
+        "name": "Stray Kids",
+        "uri": "spotify:track:08H8CT32rALUZvL8TE4ruD",
+        "artists": [
+          {
+            "id": "2dIgFjalVxs4ThymZ67YCE",
+            "name": "Stray Kids",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "3WdsoMKRqtw5Sgg67YrpnY",
+          "name": "ATE",
+          "artists": [
+            {
+              "id": "2dIgFjalVxs4ThymZ67YCE",
+              "name": "Stray Kids",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "2024-07-19",
+          "total_tracks": 8,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b27351700837cdbc6adddb88560a",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e0251700837cdbc6adddb88560a",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000485151700837cdbc6adddb88560a",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 189050,
+        "popularity": 68,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T16:16:52.127516044+00:00"
+    },
+    {
+      "track": {
+        "id": "0AdNthpY5nOB70TJ3OxCt6",
+        "name": "Angel With A Shotgun",
+        "uri": "spotify:track:0AdNthpY5nOB70TJ3OxCt6",
+        "artists": [
+          {
+            "id": "49X1BHaXBIqVjMkkV2w1qI",
+            "name": "Ericovich",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "3lHuedT4fZU30Fm3TOaFpo",
+          "name": "Angel With A Shotgun",
+          "artists": [
+            {
+              "id": "49X1BHaXBIqVjMkkV2w1qI",
+              "name": "Ericovich",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "2021-07-13",
+          "total_tracks": 1,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b2736b8c560e5119b80854ec11aa",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e026b8c560e5119b80854ec11aa",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d000048516b8c560e5119b80854ec11aa",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 139687,
+        "popularity": 0,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T16:15:38.308906553+00:00"
+    },
+    {
+      "track": {
+        "id": "2d4e45fmUnguxh6yqC7gNT",
+        "name": "Dirty Deeds Done Dirt Cheap",
+        "uri": "spotify:track:2d4e45fmUnguxh6yqC7gNT",
+        "artists": [
+          {
+            "id": "711MCceyCBcFnzjGY4Q7Un",
+            "name": "AC/DC",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "76mvVgXOde87B9aOzLXCOI",
+          "name": "Dirty Deeds Done Dirt Cheap",
+          "artists": [
+            {
+              "id": "711MCceyCBcFnzjGY4Q7Un",
+              "name": "AC/DC",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "1976-09-20",
+          "total_tracks": 9,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b27368b03027356fb05501948f62",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e0268b03027356fb05501948f62",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000485168b03027356fb05501948f62",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 231933,
+        "popularity": 74,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T16:15:10.713141604+00:00"
+    },
+    {
+      "track": {
+        "id": "3MKhTroJs5GF9H7LqN9fiw",
+        "name": "Devil in Disguise",
+        "uri": "spotify:track:3MKhTroJs5GF9H7LqN9fiw",
+        "artists": [
+          {
+            "id": "3HedFe4b2Nqeg1CEzmt6ZI",
+            "name": "Marino",
+            "genres": null,
+            "popularity": null
+          }
+        ],
+        "album": {
+          "id": "3x72yJC4Ynj7UTJSjCMbTM",
+          "name": "Devil in Disguise",
+          "artists": [
+            {
+              "id": "3HedFe4b2Nqeg1CEzmt6ZI",
+              "name": "Marino",
+              "genres": null,
+              "popularity": null
+            }
+          ],
+          "release_date": "2025-07-18",
+          "total_tracks": 1,
+          "images": [
+            {
+              "url": "https://i.scdn.co/image/ab67616d0000b273117ebf5e67defe3f175eaccc",
+              "height": 640,
+              "width": 640
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00001e02117ebf5e67defe3f175eaccc",
+              "height": 300,
+              "width": 300
+            },
+            {
+              "url": "https://i.scdn.co/image/ab67616d00004851117ebf5e67defe3f175eaccc",
+              "height": 64,
+              "width": 64
+            }
+          ]
+        },
+        "duration_ms": 104431,
+        "popularity": 86,
+        "preview_url": null
+      },
+      "played_at": "2025-09-23T13:40:02.475789817+00:00"
     },
     {
       "track": {
@@ -223,56 +659,6 @@
         "preview_url": null
       },
       "played_at": "2025-09-23T13:12:22.278505845+00:00"
-    },
-    {
-      "track": {
-        "id": "2dXsILW8gzkosqleHAvl0v",
-        "name": "For Whom The Bell Tolls - Remastered",
-        "uri": "spotify:track:2dXsILW8gzkosqleHAvl0v",
-        "artists": [
-          {
-            "id": "2ye2Wgw4gimLv2eAKyk1NB",
-            "name": "Metallica",
-            "genres": null,
-            "popularity": null
-          }
-        ],
-        "album": {
-          "id": "05DePtm7oQMdL3Uzw2Jmsc",
-          "name": "Ride The Lightning (Remastered)",
-          "artists": [
-            {
-              "id": "2ye2Wgw4gimLv2eAKyk1NB",
-              "name": "Metallica",
-              "genres": null,
-              "popularity": null
-            }
-          ],
-          "release_date": "1984-07-27",
-          "total_tracks": 8,
-          "images": [
-            {
-              "url": "https://i.scdn.co/image/ab67616d0000b2739ad3e9959f48d513886b8933",
-              "height": 640,
-              "width": 640
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d00001e029ad3e9959f48d513886b8933",
-              "height": 300,
-              "width": 300
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d000048519ad3e9959f48d513886b8933",
-              "height": 64,
-              "width": 64
-            }
-          ]
-        },
-        "duration_ms": 309973,
-        "popularity": 68,
-        "preview_url": null
-      },
-      "played_at": "2025-09-23T13:02:58.066124369+00:00"
     },
     {
       "track": {
@@ -562,56 +948,6 @@
     },
     {
       "track": {
-        "id": "55ikcenXPbQdzCnO1sOuYg",
-        "name": "I Was Made For Lovin’ You - from The Fall Guy",
-        "uri": "spotify:track:55ikcenXPbQdzCnO1sOuYg",
-        "artists": [
-          {
-            "id": "6Ad91Jof8Niiw0lGLLi3NW",
-            "name": "YUNGBLUD",
-            "genres": null,
-            "popularity": null
-          }
-        ],
-        "album": {
-          "id": "1d3yldnlofPfWQHVAybQrZ",
-          "name": "I Was Made For Lovin' You (from The Fall Guy)",
-          "artists": [
-            {
-              "id": "6Ad91Jof8Niiw0lGLLi3NW",
-              "name": "YUNGBLUD",
-              "genres": null,
-              "popularity": null
-            }
-          ],
-          "release_date": "2024-04-26",
-          "total_tracks": 1,
-          "images": [
-            {
-              "url": "https://i.scdn.co/image/ab67616d0000b2732514a547c5433aceb34ea84b",
-              "height": 640,
-              "width": 640
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d00001e022514a547c5433aceb34ea84b",
-              "height": 300,
-              "width": 300
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d000048512514a547c5433aceb34ea84b",
-              "height": 64,
-              "width": 64
-            }
-          ]
-        },
-        "duration_ms": 261519,
-        "popularity": 76,
-        "preview_url": null
-      },
-      "played_at": "2025-09-23T10:19:48.994047122+00:00"
-    },
-    {
-      "track": {
         "id": "3LpHzQU2CZzZJGdUWV79SI",
         "name": "For Whom The Bell Tolls - Remastered",
         "uri": "spotify:track:3LpHzQU2CZzZJGdUWV79SI",
@@ -759,142 +1095,6 @@
         "preview_url": null
       },
       "played_at": "2025-09-23T10:11:23.787738996+00:00"
-    },
-    {
-      "track": {
-        "id": "7zOEN0TLU0WCW5gOuTtn4G",
-        "name": "I Was Made For Loving You (Nightcore)",
-        "uri": "spotify:track:7zOEN0TLU0WCW5gOuTtn4G",
-        "artists": [
-          {
-            "id": "2QExgoGkxhdF9nEy1plnGz",
-            "name": "Nøvacore",
-            "genres": null,
-            "popularity": null
-          }
-        ],
-        "album": {
-          "id": "3mdwKSW5vZ5gfBeU3eNYjM",
-          "name": "I Was Made For Loving You (Nightcore)",
-          "artists": [
-            {
-              "id": "2QExgoGkxhdF9nEy1plnGz",
-              "name": "Nøvacore",
-              "genres": null,
-              "popularity": null
-            }
-          ],
-          "release_date": "2023-12-01",
-          "total_tracks": 1,
-          "images": [
-            {
-              "url": "https://i.scdn.co/image/ab67616d0000b273002ff8171b4bb80e2a9648dc",
-              "height": 640,
-              "width": 640
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d00001e02002ff8171b4bb80e2a9648dc",
-              "height": 300,
-              "width": 300
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d00004851002ff8171b4bb80e2a9648dc",
-              "height": 64,
-              "width": 64
-            }
-          ]
-        },
-        "duration_ms": 190978,
-        "popularity": 1,
-        "preview_url": null
-      },
-      "played_at": "2025-09-23T10:11:21.895699505+00:00"
-    },
-    {
-      "track": {
-        "id": "1CPZ5BxNNd0n0nF4Orb9JS",
-        "name": "Golden",
-        "uri": "spotify:track:1CPZ5BxNNd0n0nF4Orb9JS",
-        "artists": [
-          {
-            "id": "2yNNYQBChuox9A5Ka93BIn",
-            "name": "HUNTR/X",
-            "genres": null,
-            "popularity": null
-          },
-          {
-            "id": "0RMJOzHDhAKY1o2j0W0vxY",
-            "name": "EJAE",
-            "genres": null,
-            "popularity": null
-          },
-          {
-            "id": "0Wwji82sLA0Hcvtuak3omb",
-            "name": "AUDREY NUNA",
-            "genres": null,
-            "popularity": null
-          },
-          {
-            "id": "6U1dV7aL68N7Gb0Naq34V5",
-            "name": "REI AMI",
-            "genres": null,
-            "popularity": null
-          },
-          {
-            "id": "7mW7Tv7NvywKKXqafZo0Lc",
-            "name": "KPop Demon Hunters Cast",
-            "genres": null,
-            "popularity": null
-          }
-        ],
-        "album": {
-          "id": "14JkAa6IiFaOh5s0nMyMU9",
-          "name": "KPop Demon Hunters (Soundtrack from the Netflix Film)",
-          "artists": [
-            {
-              "id": "7mW7Tv7NvywKKXqafZo0Lc",
-              "name": "KPop Demon Hunters Cast",
-              "genres": null,
-              "popularity": null
-            },
-            {
-              "id": "2yNNYQBChuox9A5Ka93BIn",
-              "name": "HUNTR/X",
-              "genres": null,
-              "popularity": null
-            },
-            {
-              "id": "0BJ2EjOqcfgFvlZXNKrNbE",
-              "name": "Saja Boys",
-              "genres": null,
-              "popularity": null
-            }
-          ],
-          "release_date": "2025-06-20",
-          "total_tracks": 12,
-          "images": [
-            {
-              "url": "https://i.scdn.co/image/ab67616d0000b2734dcb6c5df15cf74596ab25a4",
-              "height": 640,
-              "width": 640
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d00001e024dcb6c5df15cf74596ab25a4",
-              "height": 300,
-              "width": 300
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d000048514dcb6c5df15cf74596ab25a4",
-              "height": 64,
-              "width": 64
-            }
-          ]
-        },
-        "duration_ms": 194607,
-        "popularity": 100,
-        "preview_url": null
-      },
-      "played_at": "2025-09-23T05:27:51.772554169+00:00"
     },
     {
       "track": {
@@ -1057,56 +1257,6 @@
         "preview_url": null
       },
       "played_at": "2025-09-19T17:09:52.956876809+00:00"
-    },
-    {
-      "track": {
-        "id": "6MDtS6MzlIzGUjbC1rapa4",
-        "name": "Free Fall (Theme From KinnPorsche The Series)",
-        "uri": "spotify:track:6MDtS6MzlIzGUjbC1rapa4",
-        "artists": [
-          {
-            "id": "6TNTFjkJA8PhP16Ds7CZnz",
-            "name": "Slot Machine",
-            "genres": null,
-            "popularity": null
-          }
-        ],
-        "album": {
-          "id": "7svgXSmQuVYYecwHej48Pw",
-          "name": "Free Fall (Theme From KinnPorsche The Series)",
-          "artists": [
-            {
-              "id": "6TNTFjkJA8PhP16Ds7CZnz",
-              "name": "Slot Machine",
-              "genres": null,
-              "popularity": null
-            }
-          ],
-          "release_date": "2022-03-23",
-          "total_tracks": 1,
-          "images": [
-            {
-              "url": "https://i.scdn.co/image/ab67616d0000b2739a8e6b23948864e0f94eb21d",
-              "height": 640,
-              "width": 640
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d00001e029a8e6b23948864e0f94eb21d",
-              "height": 300,
-              "width": 300
-            },
-            {
-              "url": "https://i.scdn.co/image/ab67616d000048519a8e6b23948864e0f94eb21d",
-              "height": 64,
-              "width": 64
-            }
-          ]
-        },
-        "duration_ms": 226046,
-        "popularity": 51,
-        "preview_url": null
-      },
-      "played_at": "2025-09-19T15:21:18.314506409+00:00"
     },
     {
       "track": {

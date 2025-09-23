@@ -262,7 +262,22 @@ impl SpotifyClient {
 
     pub async fn set_volume(&self, volume_percent: u8) -> Result<()> {
         let endpoint = format!("me/player/volume?volume_percent={}", volume_percent.min(100));
-        self.make_user_request_no_response("PUT", &endpoint, None).await?;
+        let empty_body = serde_json::json!({});
+        self.make_user_request_no_response("PUT", &endpoint, Some(empty_body)).await?;
+        Ok(())
+    }
+
+    pub async fn set_shuffle(&self, state: bool) -> Result<()> {
+        let endpoint = format!("me/player/shuffle?state={}", state);
+        let empty_body = serde_json::json!({});
+        self.make_user_request_no_response("PUT", &endpoint, Some(empty_body)).await?;
+        Ok(())
+    }
+
+    pub async fn set_smart_shuffle(&self, state: bool) -> Result<()> {
+        let endpoint = format!("me/player/shuffle?state={}&smart_shuffle={}", true, state);
+        let empty_body = serde_json::json!({});
+        self.make_user_request_no_response("PUT", &endpoint, Some(empty_body)).await?;
         Ok(())
     }
 
@@ -329,6 +344,25 @@ impl SpotifyClient {
 
     pub async fn get_queue(&self) -> Result<QueueResponse> {
         self.make_user_request("GET", "me/player/queue", None).await
+    }
+
+    pub async fn like_song(&self, track_id: &str) -> Result<()> {
+        let endpoint = format!("me/tracks?ids={}", track_id);
+        let empty_body = serde_json::json!({});
+        self.make_user_request_no_response("PUT", &endpoint, Some(empty_body)).await?;
+        Ok(())
+    }
+
+    pub async fn unlike_song(&self, track_id: &str) -> Result<()> {
+        let endpoint = format!("me/tracks?ids={}", track_id);
+        self.make_user_request_no_response("DELETE", &endpoint, None).await?;
+        Ok(())
+    }
+
+    pub async fn check_if_liked(&self, track_id: &str) -> Result<bool> {
+        let endpoint = format!("me/tracks/contains?ids={}", track_id);
+        let response: Vec<bool> = self.make_user_request("GET", &endpoint, None).await?;
+        Ok(response.first().copied().unwrap_or(false))
     }
 
     pub fn launch_spotify_background() -> Result<()> {
