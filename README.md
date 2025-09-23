@@ -12,7 +12,7 @@ A command-line interface for Spotify built in Rust.
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/your-username/spotycli.git
+    git clone https://github.com/N1ki2K/spotycli.git
     cd spotycli
     ```
 
