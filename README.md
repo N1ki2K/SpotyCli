@@ -1,98 +1,84 @@
-# SpotyCli - Terminal Spotify Client
+# SpotyCli
 
-A terminal-based Spotify client built in Rust using the Spotify Web API.
+A command-line interface for Spotify built in Rust.
 
-## Features
+## Requirements
 
-- Search for tracks, albums, artists, and playlists
-- Browse your library and playlists
-- Terminal-based UI with keyboard navigation
-- Real-time music controls
+- Rust
+- A Spotify Premium account
 
 ## Setup
 
-1. **Get Spotify API Credentials**
-   - Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/)
-   - Create a new app
-   - Copy your Client ID and Client Secret
+1.  **Clone the repository:**
 
-2. **Set Environment Variables**
-   ```bash
-   export SPOTIFY_CLIENT_ID="your_client_id_here"
-   export SPOTIFY_CLIENT_SECRET="your_client_secret_here"
-   ```
+    ```bash
+    git clone https://github.com/your-username/spotycli.git
+    cd spotycli
+    ```
 
-   Or create a `.env` file (copy from `.env.example`):
-   ```
-   SPOTIFY_CLIENT_ID=your_client_id_here
-   SPOTIFY_CLIENT_SECRET=your_client_secret_here
-   ```
+2.  **Create a Spotify App:**
 
-3. **Build and Run**
-   ```bash
-   cargo build --release
-   cargo run
-   ```
+    - Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/).
+    - Click "Create an App".
+    - Give it a name and description.
+    - Edit the settings and add `http://localhost:8888/callback` to the "Redirect URIs".
+    - Take note of your `Client ID` and `Client Secret`.
 
-## Controls
+3.  **Set up environment variables:**
 
-### Navigation
-- `q` - Quit application
-- `/` - Enter search mode
-- `Enter` - Execute search / Play selected track
-- `Esc` - Exit search mode / Return to Recently Played
-- `↑/↓` - Navigate lists
-- `1-5` - Switch between views:
-  - `1` - Search (shows Recently Played by default)
-  - `2` - Library
-  - `3` - Playlists
-  - `4` - Albums
-  - `5` - Artists
+    - Create a `.env` file in the root of the project:
 
-### Music Discovery
-- **Recently Played:** Default view shows your recent tracks
-- **Search Mode:** Press `/`, type query, press `Enter` to search
-- **Switch Back:** Press `Esc` to return from search results to recently played
-- **Navigation:** Use `↑/↓` arrows in both modes
-- **Play:** Press `Enter` on any track to play it
+      ```bash
+      cp .env.example .env
+      ```
 
-### Playback Controls (Requires Spotify Premium)
+    - Open the `.env` file and add your Spotify `Client ID` and `Client Secret`:
 
-**To Enable Playback Features:**
-1. First, authenticate by running: `cargo run --bin authenticate`
-2. Follow the browser authentication flow
-3. Run the main app: `cargo run`
-4. Playback controls will now be available!
+      ```
+      SPOTIFY_CLIENT_ID=your_client_id
+      SPOTIFY_CLIENT_SECRET=your_client_secret
+      ```
 
-**Playback Controls:**
-- `u` - Show authentication status / Get auth instructions
-- `Space` - Play/Pause current track
-- `n` - Next track
-- `p` - Previous track
-- `+` - Volume up
-- `-` - Volume down
-- `Enter` - Play selected track
+## Usage
 
-**Requirements:**
-- **Spotify Premium** account (required for playback)
-- Active Spotify device (desktop app, mobile, web player)
-- Successful authentication via browser
+1.  **Authenticate with Spotify:**
 
-## Screenshots
+    Run the following command to authenticate with your Spotify account. This will open a browser window for you to log in and authorize the application.
 
-The application features a three-panel layout similar to the Spotify desktop client:
-- Left sidebar: Library and playlists
-- Main content: Search results, albums, tracks
-- Bottom panel: Now playing and controls
+    ```bash
+    cargo run --bin authenticate
+    ```
 
-## Development
+    This will create a `.spotify_tokens` file in the root of the project with your authentication tokens.
 
-Built with:
-- [Ratatui](https://ratatui.rs/) for terminal UI
-- [Tokio](https://tokio.rs/) for async runtime
-- [Reqwest](https://github.com/seanmonstar/reqwest) for HTTP requests
-- [Serde](https://serde.rs/) for JSON serialization
+2.  **Run the application:**
 
-## License
+    ```bash
+    cargo run
+    ```
 
-MIT
+## Features
+
+- View and control your Spotify playback.
+- Browse your playlists and liked songs.
+- Search for tracks, albums, and artists.
+- TUI built with `ratatui` and `crossterm`.
+
+## Dependencies
+
+- `dotenv`
+- `tokio`
+- `reqwest`
+- `serde`
+- `serde_json`
+- `ratatui`
+- `crossterm`
+- `anyhow`
+- `base64`
+- `url`
+- `chrono`
+- `urlencoding`
+- `sha2`
+- `rand`
+- `warp`
+- `webbrowser`
