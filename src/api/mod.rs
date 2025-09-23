@@ -3,6 +3,7 @@ use base64::Engine;
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::process::{Command, Stdio};
 
 use crate::models::*;
 use crate::auth::UserTokens;
@@ -120,6 +121,11 @@ impl SpotifyClient {
         self.make_request(&endpoint).await
     }
 
+    pub async fn get_playlist_tracks(&self, playlist_id: &str, limit: u32, offset: u32) -> Result<PlaylistTracks> {
+        let endpoint = format!("playlists/{}/tracks?limit={}&offset={}", playlist_id, limit.min(50), offset);
+        self.make_request(&endpoint).await
+    }
+
     pub async fn get_featured_playlists(&self, limit: u32) -> Result<SearchPlaylists> {
         let endpoint = format!("browse/featured-playlists?limit={}", limit);
         let response: serde_json::Value = self.make_request(&endpoint).await?;
@@ -175,11 +181,21 @@ impl SpotifyClient {
         let response = request.send().await?;
 
         if response.status().is_success() {
-            if response.content_length() == Some(0) {
+            // Check if response is empty (204 No Content or Content-Length: 0)
+            if response.status().as_u16() == 204 || response.content_length() == Some(0) {
                 // For empty responses, return a default value
                 return Ok(serde_json::from_str("{}")?);
             }
-            let result = response.json().await?;
+
+            // Try to get the response text first to handle empty bodies
+            let response_text = response.text().await?;
+            if response_text.trim().is_empty() {
+                // Empty response body, return default
+                return Ok(serde_json::from_str("{}")?);
+            }
+
+            // Parse the JSON response
+            let result = serde_json::from_str(&response_text)?;
             Ok(result)
         } else {
             let error_text = response.text().await?;
@@ -198,37 +214,193 @@ impl SpotifyClient {
         let body = serde_json::json!({
             "uris": [track_uri]
         });
-        self.make_user_request::<serde_json::Value>("PUT", "me/player/play", Some(body)).await?;
+        self.make_user_request_no_response("PUT", "me/player/play", Some(body)).await?;
+        Ok(())
+    }
+
+    pub async fn play_tracks_with_offset(&self, track_uris: &[String], offset: usize) -> Result<()> {
+        let body = serde_json::json!({
+            "uris": track_uris,
+            "offset": {
+                "position": offset
+            }
+        });
+        self.make_user_request_no_response("PUT", "me/player/play", Some(body)).await?;
+        Ok(())
+    }
+
+    pub async fn play_playlist_with_offset(&self, playlist_uri: &str, offset: usize) -> Result<()> {
+        let body = serde_json::json!({
+            "context_uri": playlist_uri,
+            "offset": {
+                "position": offset
+            }
+        });
+        self.make_user_request_no_response("PUT", "me/player/play", Some(body)).await?;
         Ok(())
     }
 
     pub async fn pause_playback(&self) -> Result<()> {
-        self.make_user_request::<serde_json::Value>("PUT", "me/player/pause", None).await?;
+        self.make_user_request_no_response("PUT", "me/player/pause", None).await?;
         Ok(())
     }
 
     pub async fn resume_playback(&self) -> Result<()> {
-        self.make_user_request::<serde_json::Value>("PUT", "me/player/play", None).await?;
+        self.make_user_request_no_response("PUT", "me/player/play", None).await?;
         Ok(())
     }
 
     pub async fn next_track(&self) -> Result<()> {
-        self.make_user_request::<serde_json::Value>("POST", "me/player/next", None).await?;
+        self.make_user_request_no_response("POST", "me/player/next", None).await?;
         Ok(())
     }
 
     pub async fn previous_track(&self) -> Result<()> {
-        self.make_user_request::<serde_json::Value>("POST", "me/player/previous", None).await?;
+        self.make_user_request_no_response("POST", "me/player/previous", None).await?;
         Ok(())
     }
 
     pub async fn set_volume(&self, volume_percent: u8) -> Result<()> {
         let endpoint = format!("me/player/volume?volume_percent={}", volume_percent.min(100));
-        self.make_user_request::<serde_json::Value>("PUT", &endpoint, None).await?;
+        self.make_user_request_no_response("PUT", &endpoint, None).await?;
         Ok(())
     }
 
     pub async fn get_available_devices(&self) -> Result<DeviceList> {
         self.make_user_request("GET", "me/player/devices", None).await
+    }
+
+    pub async fn get_recently_played(&self, limit: u32) -> Result<RecentlyPlayedResponse> {
+        let endpoint = format!("me/player/recently-played?limit={}", limit.min(50));
+        self.make_user_request("GET", &endpoint, None).await
+    }
+
+    pub async fn get_user_playlists(&self, limit: u32, offset: u32) -> Result<PlaylistsResponse> {
+        let endpoint = format!("me/playlists?limit={}&offset={}", limit.min(50), offset);
+        self.make_user_request("GET", &endpoint, None).await
+    }
+
+    pub async fn get_liked_songs(&self, limit: u32, offset: u32) -> Result<serde_json::Value> {
+        let endpoint = format!("me/tracks?limit={}&offset={}", limit.min(50), offset);
+        self.make_user_request("GET", &endpoint, None).await
+    }
+
+    pub async fn add_to_queue(&self, track_uri: &str) -> Result<()> {
+        let endpoint = format!("me/player/queue?uri={}", urlencoding::encode(track_uri));
+        // POST requests need a body, even if empty, to set proper Content-Length header
+        let empty_body = serde_json::json!({});
+
+        // Use a specialized method for endpoints that don't return JSON
+        self.make_user_request_no_response("POST", &endpoint, Some(empty_body)).await?;
+        Ok(())
+    }
+
+    async fn make_user_request_no_response(&self, method: &str, endpoint: &str, body: Option<serde_json::Value>) -> Result<()> {
+        let tokens = self
+            .user_tokens
+            .as_ref()
+            .ok_or_else(|| anyhow!("User not authenticated"))?;
+
+        let url = format!("{}/{}", self.base_url, endpoint);
+        let mut request = match method {
+            "GET" => self.client.get(&url),
+            "POST" => self.client.post(&url),
+            "PUT" => self.client.put(&url),
+            "DELETE" => self.client.delete(&url),
+            _ => return Err(anyhow!("Unsupported HTTP method")),
+        };
+
+        request = request.header("Authorization", format!("Bearer {}", tokens.access_token));
+
+        if let Some(json_body) = body {
+            request = request.json(&json_body);
+        }
+
+        let response = request.send().await?;
+
+        if response.status().is_success() {
+            // Don't try to parse response body for these endpoints
+            Ok(())
+        } else {
+            let error_text = response.text().await?;
+            Err(anyhow!("API request failed: {}", error_text))
+        }
+    }
+
+    pub async fn get_queue(&self) -> Result<QueueResponse> {
+        self.make_user_request("GET", "me/player/queue", None).await
+    }
+
+    pub fn launch_spotify_background() -> Result<()> {
+        // First check if Spotify is already running
+        let check_output = Command::new("pgrep")
+            .arg("-f")
+            .arg("spotify")
+            .output();
+
+        match check_output {
+            Ok(output) => {
+                if !output.stdout.is_empty() {
+                    // Spotify is already running
+                    println!("🎵 Spotify is already running");
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                // pgrep failed, continue with launch attempt
+            }
+        }
+
+        // Try to launch Spotify via Flatpak in background with maximum detachment
+        let result = Command::new("sh")
+            .arg("-c")
+            .arg("nohup flatpak run com.spotify.Client >/dev/null 2>&1 & disown")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .spawn();
+
+        match result {
+            Ok(mut child) => {
+                // Detach the process so it continues running independently
+                match child.try_wait() {
+                    Ok(Some(_)) => {
+                        // Process exited immediately, might be an error
+                        println!("⚠️  Spotify process exited immediately");
+                    }
+                    Ok(None) => {
+                        // Process is still running, which is what we want
+                        println!("🚀 Launched Spotify in background (headless mode)");
+                    }
+                    Err(_) => {
+                        println!("🚀 Launched Spotify in background");
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // If Flatpak fails, try other methods
+                println!("⚠️  Failed to launch via Flatpak: {}", e);
+
+                // Try native spotify command as fallback with shell detachment
+                let fallback_result = Command::new("sh")
+                    .arg("-c")
+                    .arg("nohup spotify >/dev/null 2>&1 & disown")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .stdin(Stdio::null())
+                    .spawn();
+
+                match fallback_result {
+                    Ok(_) => {
+                        println!("🚀 Launched Spotify in background (native)");
+                        Ok(())
+                    }
+                    Err(e2) => {
+                        Err(anyhow!("Failed to launch Spotify: Flatpak error: {}, Native error: {}", e, e2))
+                    }
+                }
+            }
+        }
     }
 }

@@ -48,78 +48,91 @@ impl App {
         self.auth_client = Some(client);
     }
 
-    fn trigger_search(&mut self) {
-        if !self.state.search_query.is_empty() {
-            // Create some sample search results based on the query
-            use crate::models::*;
 
-            let sample_tracks = vec![
-                Track {
-                    id: "1".to_string(),
-                    name: format!("{} - Nothing Else Matters", self.state.search_query),
-                    uri: "spotify:track:1".to_string(),
-                    artists: vec![Artist {
-                        id: "1".to_string(),
-                        name: "Metallica".to_string(),
-                        genres: None,
-                        popularity: None,
-                    }],
-                    album: None,
-                    duration_ms: 360000,
-                    popularity: 90,
-                    preview_url: None,
-                },
-                Track {
-                    id: "2".to_string(),
-                    name: format!("{} - Enter Sandman", self.state.search_query),
-                    uri: "spotify:track:2".to_string(),
-                    artists: vec![Artist {
-                        id: "1".to_string(),
-                        name: "Metallica".to_string(),
-                        genres: None,
-                        popularity: None,
-                    }],
-                    album: None,
-                    duration_ms: 330000,
-                    popularity: 95,
-                    preview_url: None,
-                },
-                Track {
-                    id: "3".to_string(),
-                    name: format!("{} - Master of Puppets", self.state.search_query),
-                    uri: "spotify:track:3".to_string(),
-                    artists: vec![Artist {
-                        id: "1".to_string(),
-                        name: "Metallica".to_string(),
-                        genres: None,
-                        popularity: None,
-                    }],
-                    album: None,
-                    duration_ms: 515000,
-                    popularity: 88,
-                    preview_url: None,
-                },
-            ];
-
-            let search_response = SearchResponse {
-                tracks: Some(SearchTracks {
-                    items: sample_tracks,
-                    total: 3,
-                }),
-                artists: None,
-                albums: None,
-                playlists: None,
-            };
-
-            self.state.search_results = Some(search_response);
+    async fn trigger_search(&mut self) {
+        if self.state.search_query.is_empty() {
+            // Empty search - show recently played tracks
+            self.state.search_results = None;
+            self.state.recently_played = self.state.recently_played_storage.get_tracks();
             self.list_state.select(Some(0));
+            return;
+        }
+
+        if !self.state.search_query.is_empty() {
+            if let Some(ref client) = self.spotify_client {
+                match client.search(&self.state.search_query, "track", 10).await {
+                    Ok(search_results) => {
+                        self.state.search_results = Some(search_results);
+                        self.list_state.select(Some(0));
+                    },
+                    Err(_) => {
+                        // Fallback to mock results if search fails
+                        use crate::models::*;
+
+                        let sample_tracks = vec![
+                            Track {
+                                id: "error1".to_string(),
+                                name: format!("No results for '{}'", self.state.search_query),
+                                uri: "spotify:track:error1".to_string(),
+                                artists: vec![Artist {
+                                    id: "error".to_string(),
+                                    name: "Search Error".to_string(),
+                                    genres: None,
+                                    popularity: None,
+                                }],
+                                album: None,
+                                duration_ms: 0,
+                                popularity: 0,
+                                preview_url: None,
+                            },
+                        ];
+
+                        let search_response = SearchResponse {
+                            tracks: Some(SearchTracks {
+                                items: sample_tracks,
+                                total: 1,
+                            }),
+                            artists: None,
+                            albums: None,
+                            playlists: None,
+                        };
+
+                        self.state.search_results = Some(search_response);
+                        self.list_state.select(Some(0));
+                    }
+                }
+            }
         }
     }
 
-    fn authenticate_user(&mut self) {
+    async fn authenticate_user(&mut self) {
         if self.state.user_authenticated {
-            // Already authenticated, show status
-            self.state.auth_message = "✅ Already authenticated for playback!".to_string();
+            // Check for available devices
+            if let Some(ref client) = self.spotify_client {
+                match client.get_available_devices().await {
+                    Ok(devices) => {
+                        if devices.devices.is_empty() {
+                            self.state.auth_message = "❌ No Spotify devices found! Open Spotify app first.".to_string();
+                        } else {
+                            let active_device = devices.devices.iter().find(|d| d.is_active);
+                            if let Some(device) = active_device {
+                                self.state.auth_message = format!("✅ Connected to: {}", device.name);
+                            } else {
+                                self.state.auth_message = format!("⚠️ {} devices found but none active. Start playing something in Spotify first.", devices.devices.len());
+                            }
+                        }
+
+                        // Load recently played tracks and playlists when device check succeeds
+                        self.load_recently_played_from_spotify().await;
+                        self.load_user_playlists().await;
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("❌ Device check failed: {}", e);
+                    }
+                }
+            } else {
+                self.state.auth_message = "✅ Authenticated but no client available".to_string();
+            }
         } else if self.auth_client.is_some() {
             // Show authentication instructions
             self.state.auth_message = "🔐 Authentication required! Exit app (press 'q') and run: cargo run --bin authenticate".to_string();
@@ -128,69 +141,529 @@ impl App {
         }
     }
 
-    fn toggle_playback(&mut self) {
+
+    pub async fn load_recently_played_from_spotify(&mut self) {
         if self.state.user_authenticated {
-            self.state.is_playing = !self.state.is_playing;
-            // In a real implementation, this would call the Spotify API
-        }
-    }
+            if let Some(ref client) = self.spotify_client {
+                match client.get_recently_played(30).await {
+                    Ok(response) => {
+                        self.state.recently_played_storage.update_from_spotify(response.items);
+                        self.state.recently_played = self.state.recently_played_storage.get_tracks();
 
-    fn play_selected_track(&mut self) {
-        if let Some(selected) = self.list_state.selected() {
-            // Try to get track from search results first
-            let track = if let Some(ref results) = self.state.search_results {
-                if let Some(ref tracks) = results.tracks {
-                    tracks.items.get(selected).cloned()
-                } else {
-                    None
-                }
-            } else {
-                // Otherwise get from recently played
-                self.state.recently_played.get(selected).cloned()
-            };
-
-            if let Some(track) = track {
-                self.state.current_track = Some(track.clone());
-
-                if self.state.user_authenticated {
-                    self.state.is_playing = true;
-                    self.state.auth_message = "🎵 Playing track!".to_string();
-                    // In a real implementation, this would call spotify_client.play_track(&track.uri)
-                } else {
-                    self.state.is_playing = false;
-                    self.state.auth_message = "🔒 Track selected! Authenticate to play.".to_string();
+                        // Save to file
+                        if let Err(e) = self.state.recently_played_storage.save() {
+                            self.log_error(format!("Failed to save recently played: {}", e));
+                        } else {
+                            self.state.auth_message = format!("✅ Loaded {} recently played tracks", self.state.recently_played.len());
+                        }
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("⚠️ Failed to load recently played: {}", e);
+                    }
                 }
             }
         }
     }
 
-    fn next_track(&mut self) {
+    pub async fn load_user_playlists(&mut self) {
         if self.state.user_authenticated {
-            // In a real implementation, this would call spotify_client.next_track()
+            if let Some(ref client) = self.spotify_client {
+                self.state.auth_message = "🔄 Loading playlists...".to_string();
+                match client.get_user_playlists(50, 0).await {
+                    Ok(response) => {
+                        self.state.user_playlists = response.items;
+                        self.state.auth_message = format!("✅ Loaded {} playlists", self.state.user_playlists.len());
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("⚠️ Failed to load playlists: {}", e);
+                    }
+                }
+            } else {
+                self.state.auth_message = "❌ No Spotify client available".to_string();
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required to load playlists".to_string();
         }
     }
 
-    fn previous_track(&mut self) {
+    async fn load_queue(&mut self) {
         if self.state.user_authenticated {
-            // In a real implementation, this would call spotify_client.previous_track()
+            if let Some(ref client) = self.spotify_client {
+                self.state.auth_message = "🔄 Loading queue...".to_string();
+                match client.get_queue().await {
+                    Ok(response) => {
+                        self.state.queue = response.queue;
+                        self.state.auth_message = format!("✅ Loaded {} tracks in queue", self.state.queue.len());
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("⚠️ Failed to load queue: {}", e);
+                    }
+                }
+            } else {
+                self.state.auth_message = "❌ No Spotify client available".to_string();
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required to load queue".to_string();
         }
     }
 
-    fn volume_up(&mut self) {
+    pub async fn load_selected_playlist_tracks(&mut self, playlist_id: &str) {
         if self.state.user_authenticated {
-            self.state.volume = (self.state.volume + 10).min(100);
-            // In a real implementation, this would call spotify_client.set_volume()
+            if let Some(ref client) = self.spotify_client {
+                self.state.auth_message = "🔄 Loading playlist tracks...".to_string();
+                match client.get_playlist_tracks(playlist_id, 50, 0).await {
+                    Ok(tracks_response) => {
+                        if let Some(items) = tracks_response.items {
+                            self.state.selected_playlist_tracks = items
+                                .into_iter()
+                                .filter_map(|item| item.track)
+                                .collect();
+                            self.state.current_view = ViewType::PlaylistTracks;
+                            self.list_state.select(Some(0)); // Reset selection to first item
+                            self.state.auth_message = format!("✅ Loaded {} tracks", self.state.selected_playlist_tracks.len());
+                        } else {
+                            self.state.selected_playlist_tracks = Vec::new();
+                            self.state.current_view = ViewType::PlaylistTracks;
+                            self.state.auth_message = "⚠️ Playlist has no tracks".to_string();
+                        }
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("❌ Failed to load playlist tracks: {}", e);
+                    }
+                }
+            } else {
+                self.state.auth_message = "❌ No Spotify client available".to_string();
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required to load playlist tracks".to_string();
         }
     }
 
-    fn volume_down(&mut self) {
+    pub async fn load_liked_songs(&mut self) {
         if self.state.user_authenticated {
-            self.state.volume = self.state.volume.saturating_sub(10);
-            // In a real implementation, this would call spotify_client.set_volume()
+            if let Some(ref client) = self.spotify_client {
+                self.state.auth_message = "🔄 Loading liked songs...".to_string();
+                match client.get_liked_songs(50, 0).await {
+                    Ok(response) => {
+                        if let Some(items) = response.get("items").and_then(|v| v.as_array()) {
+                            let mut tracks = Vec::new();
+                            for item in items {
+                                if let Some(track_obj) = item.get("track") {
+                                    if let Ok(track) = serde_json::from_value::<crate::models::Track>(track_obj.clone()) {
+                                        tracks.push(track);
+                                    }
+                                }
+                            }
+                            self.state.liked_songs = tracks;
+                            self.state.auth_message = format!("✅ Loaded {} liked songs", self.state.liked_songs.len());
+                        } else {
+                            self.state.liked_songs = Vec::new();
+                            self.state.auth_message = "⚠️ No liked songs found".to_string();
+                        }
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("❌ Failed to load liked songs: {}", e);
+                    }
+                }
+            } else {
+                self.state.auth_message = "❌ No Spotify client available".to_string();
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required to load liked songs".to_string();
         }
     }
 
-    pub fn run<B: ratatui::backend::Backend>(&mut self, terminal: &mut Terminal<B>) -> io::Result<()> {
+    async fn open_selected_playlist(&mut self) {
+        if let Some(selected) = self.list_state.selected() {
+            if selected < self.state.user_playlists.len() {
+                let playlist = self.state.user_playlists[selected].clone();
+                self.state.selected_playlist = Some(playlist.clone());
+                self.load_selected_playlist_tracks(&playlist.id).await;
+            }
+        }
+    }
+
+    async fn play_selected_track(&mut self) {
+        if let Some(selected) = self.list_state.selected() {
+            let track = match self.state.current_view {
+                ViewType::Search => {
+                    if let Some(ref search_results) = self.state.search_results {
+                        if let Some(ref tracks) = search_results.tracks {
+                            if selected < tracks.items.len() {
+                                Some(tracks.items[selected].clone())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        // Recently played tracks
+                        if selected < self.state.recently_played.len() {
+                            Some(self.state.recently_played[selected].clone())
+                        } else {
+                            None
+                        }
+                    }
+                }
+                ViewType::PlaylistTracks => {
+                    if selected < self.state.selected_playlist_tracks.len() {
+                        Some(self.state.selected_playlist_tracks[selected].clone())
+                    } else {
+                        None
+                    }
+                }
+                ViewType::Library => {
+                    if !self.state.liked_songs.is_empty() {
+                        // Use actual liked songs
+                        if selected < self.state.liked_songs.len() {
+                            Some(self.state.liked_songs[selected].clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        // Use sample liked songs from recently played for now
+                        if selected < self.state.recently_played.len() {
+                            Some(self.state.recently_played[selected].clone())
+                        } else {
+                            None
+                        }
+                    }
+                }
+                ViewType::Queue => {
+                    if selected < self.state.queue.len() {
+                        Some(self.state.queue[selected].clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+
+            if let Some(track) = track {
+                if self.state.user_authenticated {
+                    if let Some(ref client) = self.spotify_client {
+                        let play_result = match self.state.current_view {
+                            ViewType::PlaylistTracks => {
+                                // Play playlist with context for continuous playback
+                                if let Some(ref playlist) = self.state.selected_playlist {
+                                    let playlist_uri = playlist.uri.clone()
+                                        .unwrap_or_else(|| format!("spotify:playlist:{}", playlist.id));
+                                    client.play_playlist_with_offset(&playlist_uri, selected).await
+                                } else {
+                                    // Fallback to playing individual track
+                                    client.play_track(&track.uri).await
+                                }
+                            }
+                            ViewType::Library => {
+                                // Play liked songs with context
+                                let track_uris: Vec<String> = self.state.liked_songs.iter()
+                                    .map(|t| t.uri.clone())
+                                    .collect();
+                                if !track_uris.is_empty() {
+                                    client.play_tracks_with_offset(&track_uris, selected).await
+                                } else {
+                                    // Fallback to recently played
+                                    let track_uris: Vec<String> = self.state.recently_played.iter()
+                                        .map(|t| t.uri.clone())
+                                        .collect();
+                                    client.play_tracks_with_offset(&track_uris, selected).await
+                                }
+                            }
+                            _ => {
+                                // For other views, play individual track
+                                client.play_track(&track.uri).await
+                            }
+                        };
+
+                        match play_result {
+                            Ok(_) => {
+                                self.state.auth_message = format!("▶ Playing: {} (with playlist context)", track.name);
+                                self.state.current_track = Some(track.clone());
+                                self.state.is_playing = true;
+
+                                // Add to recently played storage
+                                self.state.recently_played_storage.add_track(track, None);
+                                let _ = self.state.recently_played_storage.save();
+
+                                // Sync with Spotify after a short delay
+                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                                self.sync_playback_state().await;
+                            }
+                            Err(e) => {
+                                self.log_error(format!("❌ PLAY ERROR: {}", e));
+                                let error_msg = e.to_string();
+                                if error_msg.contains("NO_ACTIVE_DEVICE") {
+                                    self.state.auth_message = "❌ No active device! Open Spotify app first.".to_string();
+                                } else if error_msg.contains("PREMIUM_REQUIRED") {
+                                    self.state.auth_message = "❌ Spotify Premium required for playback.".to_string();
+                                } else {
+                                    self.state.auth_message = format!("❌ Play error: {}", e);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    self.state.auth_message = "❌ Authentication required for playback".to_string();
+                }
+            }
+        }
+    }
+
+    async fn toggle_playback(&mut self) {
+        if self.state.user_authenticated {
+            if let Some(ref client) = self.spotify_client {
+                let result = if self.state.is_playing {
+                    client.pause_playback().await
+                } else {
+                    client.resume_playback().await
+                };
+
+                match result {
+                    Ok(_) => {
+                        self.state.is_playing = !self.state.is_playing;
+                        self.state.auth_message = format!("🎵 {}", if self.state.is_playing { "Resumed" } else { "Paused" });
+
+                        // Sync with Spotify after a short delay
+                        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+                        self.sync_playback_state().await;
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("❌ Playback error: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    async fn next_track(&mut self) {
+        if self.state.user_authenticated {
+            if let Some(ref client) = self.spotify_client {
+                match client.next_track().await {
+                    Ok(_) => {
+                        self.state.auth_message = "⏭ Next track".to_string();
+
+                        // Sync with Spotify after a delay to allow track change
+                        tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+                        self.sync_playback_state().await;
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("❌ Next track error: {}", e);
+                    }
+                }
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required".to_string();
+        }
+    }
+
+    async fn previous_track(&mut self) {
+        if self.state.user_authenticated {
+            if let Some(ref client) = self.spotify_client {
+                match client.previous_track().await {
+                    Ok(_) => {
+                        self.state.auth_message = "⏮ Previous track".to_string();
+
+                        // Sync with Spotify after a delay to allow track change
+                        tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+                        self.sync_playback_state().await;
+                    },
+                    Err(e) => {
+                        self.state.auth_message = format!("❌ Previous track error: {}", e);
+                    }
+                }
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required".to_string();
+        }
+    }
+
+
+    fn log_error(&mut self, message: String) {
+        let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
+        let log_entry = format!("[{}] {}", timestamp, message);
+        self.state.error_logs.push(log_entry);
+
+        // Keep only last 100 log entries
+        if self.state.error_logs.len() > 100 {
+            self.state.error_logs.remove(0);
+        }
+    }
+
+    async fn add_selected_to_queue(&mut self) {
+        let user_authenticated = self.state.user_authenticated;
+        let current_view = self.state.current_view.clone();
+        let selected = self.list_state.selected();
+
+        if let Some(selected) = selected {
+            let track = match current_view {
+                ViewType::Search => {
+                    if let Some(ref search_results) = self.state.search_results {
+                        if let Some(ref tracks) = search_results.tracks {
+                            if selected < tracks.items.len() {
+                                Some(tracks.items[selected].clone())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        if selected < self.state.recently_played.len() {
+                            Some(self.state.recently_played[selected].clone())
+                        } else {
+                            None
+                        }
+                    }
+                }
+                ViewType::PlaylistTracks => {
+                    if selected < self.state.selected_playlist_tracks.len() {
+                        Some(self.state.selected_playlist_tracks[selected].clone())
+                    } else {
+                        None
+                    }
+                }
+                ViewType::Library => {
+                    if !self.state.liked_songs.is_empty() {
+                        // Use actual liked songs
+                        if selected < self.state.liked_songs.len() {
+                            Some(self.state.liked_songs[selected].clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        // Use sample liked songs from recently played for now
+                        if selected < self.state.recently_played.len() {
+                            Some(self.state.recently_played[selected].clone())
+                        } else {
+                            None
+                        }
+                    }
+                }
+                _ => {
+                    if selected < self.state.recently_played.len() {
+                        Some(self.state.recently_played[selected].clone())
+                    } else {
+                        None
+                    }
+                }
+            };
+
+            if let Some(track) = track {
+                if user_authenticated {
+                    if let Some(client) = self.spotify_client.clone() {
+                        match client.add_to_queue(&track.uri).await {
+                            Ok(_) => {
+                                self.state.auth_message = format!("➕ Added to queue: {}", track.name);
+                            },
+                            Err(e) => {
+                                self.log_error(format!("❌ QUEUE ERROR: {}", e));
+                                let error_msg = e.to_string();
+                                if error_msg.contains("NO_ACTIVE_DEVICE") {
+                                    self.state.auth_message = "❌ No active device! Open Spotify app first.".to_string();
+                                } else if error_msg.contains("PREMIUM_REQUIRED") {
+                                    self.state.auth_message = "❌ Spotify Premium required for queue control.".to_string();
+                                } else {
+                                    self.state.auth_message = format!("❌ Queue error: {}", e);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    self.state.auth_message = "❌ Authentication required for queue control".to_string();
+                }
+            }
+        }
+    }
+
+    async fn volume_up(&mut self) {
+        self.adjust_volume(10).await;
+    }
+
+    async fn volume_down(&mut self) {
+        self.adjust_volume(-10).await;
+    }
+
+    async fn adjust_volume(&mut self, delta: i8) {
+        if self.state.user_authenticated {
+            if let Some(ref client) = self.spotify_client {
+                // First, try to get current volume from Spotify
+                let current_volume = if let Ok(Some(playback)) = client.get_current_playback().await {
+                    if let Some(volume) = playback.device.volume_percent {
+                        volume
+                    } else {
+                        self.state.volume // fallback to stored volume
+                    }
+                } else {
+                    self.state.volume // fallback to stored volume
+                };
+
+                let new_volume = (current_volume as i16 + delta as i16).clamp(0, 100) as u8;
+
+                match client.set_volume(new_volume).await {
+                    Ok(_) => {
+                        self.state.volume = new_volume;
+                        self.state.auth_message = format!("🔊 Volume: {}%", new_volume);
+                    },
+                    Err(e) => {
+                        let error_msg = e.to_string();
+                        if error_msg.contains("NO_ACTIVE_DEVICE") {
+                            self.state.auth_message = "❌ No active device! Open Spotify app first.".to_string();
+                        } else if error_msg.contains("PREMIUM_REQUIRED") {
+                            self.state.auth_message = "❌ Spotify Premium required for volume control.".to_string();
+                        } else {
+                            self.state.auth_message = format!("❌ Volume error: {}", e);
+                        }
+                    }
+                }
+            } else {
+                self.state.auth_message = "❌ No Spotify client available".to_string();
+            }
+        } else {
+            self.state.auth_message = "❌ Authentication required for volume control".to_string();
+        }
+    }
+
+    async fn sync_playback_state(&mut self) {
+        if self.state.user_authenticated {
+            if let Some(ref client) = self.spotify_client {
+                match client.get_current_playback().await {
+                    Ok(Some(playback)) => {
+                        self.state.current_playback = Some(playback.clone());
+                        self.state.is_playing = playback.is_playing;
+
+                        if let Some(track) = playback.item {
+                            self.state.current_track = Some(track.clone());
+                            if playback.is_playing {
+                                self.state.auth_message = format!("▶ Now Playing: {}", track.name);
+                            } else {
+                                self.state.auth_message = format!("⏸️ Paused: {}", track.name);
+                            }
+                        } else {
+                            self.state.current_track = None;
+                            self.state.auth_message = if playback.is_playing {
+                                "▶ Playing...".to_string()
+                            } else {
+                                "⏸️ Paused".to_string()
+                            };
+                        }
+                    }
+                    Ok(None) => {
+                        // No active playback
+                        self.state.current_playback = None;
+                        self.state.is_playing = false;
+                        self.state.current_track = None;
+                        self.state.auth_message = "⏹️ No active playback".to_string();
+                    }
+                    Err(e) => {
+                        self.log_error(format!("❌ SYNC ERROR: {}", e));
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn run<B: ratatui::backend::Backend>(&mut self, terminal: &mut Terminal<B>) -> io::Result<()> {
         loop {
             terminal.draw(|f| self.ui(f))?;
 
@@ -202,23 +675,117 @@ impl App {
                             self.input_mode = true;
                             self.state.current_view = ViewType::Search;
                         }
+                        KeyCode::Char('d') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                            // Prevent accidental Ctrl+D termination - show warning instead
+                            self.state.auth_message = "⚠️ Use 'q' to quit or '/' to search (not Ctrl+D)".to_string();
+                        }
+                        KeyCode::Left if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                            // Switch to previous tab
+                            self.switch_tab(-1).await;
+                        }
+                        KeyCode::Right if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                            // Switch to next tab
+                            self.switch_tab(1).await;
+                        }
+                        KeyCode::Char('r') if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) => {
+                            // Alt+R: Previous track
+                            self.previous_track().await;
+                        }
+                        KeyCode::Char('t') if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) => {
+                            // Alt+T: Next track
+                            self.next_track().await;
+                        }
+                        KeyCode::Up => {
+                            if !self.input_mode {
+                                if let Some(selected) = self.list_state.selected() {
+                                    if selected > 0 {
+                                        self.list_state.select(Some(selected - 1));
+                                    }
+                                }
+                            }
+                        }
+                        KeyCode::Down => {
+                            if !self.input_mode {
+                                let item_count = match self.state.current_view {
+                                    ViewType::Search => {
+                                        if let Some(ref search_results) = self.state.search_results {
+                                            if let Some(ref tracks) = search_results.tracks {
+                                                tracks.items.len()
+                                            } else {
+                                                self.state.recently_played.len()
+                                            }
+                                        } else {
+                                            self.state.recently_played.len()
+                                        }
+                                    }
+                                    ViewType::Library => {
+                                        if !self.state.liked_songs.is_empty() {
+                                            self.state.liked_songs.len()
+                                        } else {
+                                            9 // Number of sample items shown
+                                        }
+                                    }
+                                    ViewType::Playlists => self.state.user_playlists.len().max(10), // Sample playlists
+                                    ViewType::PlaylistTracks => self.state.selected_playlist_tracks.len(),
+                                    ViewType::Queue => self.state.queue.len().max(2), // At least show "No tracks" message
+                                    ViewType::Albums => self.state.user_albums.len(),
+                                    ViewType::Artists => self.state.user_artists.len(),
+                                    ViewType::Errors => self.state.error_logs.len(),
+                                    _ => 0,
+                                };
+
+                                if let Some(selected) = self.list_state.selected() {
+                                    if selected + 1 < item_count {
+                                        self.list_state.select(Some(selected + 1));
+                                    }
+                                }
+                            }
+                        }
                         KeyCode::Enter => {
                             if self.input_mode {
                                 self.input_mode = false;
-                                self.trigger_search();
+                                self.trigger_search().await;
                             } else {
-                                self.play_selected_track();
+                                match self.state.current_view {
+                                    ViewType::Playlists => {
+                                        self.open_selected_playlist().await;
+                                    }
+                                    _ => {
+                                        self.play_selected_track().await;
+                                    }
+                                }
                             }
                         }
                         KeyCode::Esc => {
                             if self.input_mode {
                                 self.input_mode = false;
                             } else {
-                                // Clear search results to show recently played
-                                self.state.search_results = None;
-                                self.state.search_query.clear();
-                                self.list_state.select(Some(0));
-                                self.state.auth_message.clear();
+                                match self.state.current_view {
+                                    ViewType::PlaylistTracks => {
+                                        // Go back to playlists view
+                                        self.state.current_view = ViewType::Playlists;
+                                        self.state.selected_playlist = None;
+                                        self.state.selected_playlist_tracks.clear();
+                                        self.list_state.select(Some(0)); // Reset selection
+                                        self.state.auth_message.clear();
+                                    }
+                                    _ => {
+                                        // Clear search results to show recently played
+                                        self.state.search_results = None;
+                                        self.state.search_query.clear();
+                                        self.list_state.select(Some(0));
+                                        self.state.auth_message.clear();
+                                    }
+                                }
+
+                                // Load fresh recently played tracks from storage and Spotify
+                                self.state.recently_played = self.state.recently_played_storage.get_tracks();
+                                if self.state.user_authenticated {
+                                    tokio::spawn(async move {
+                                        // Note: Can't directly call self method in spawn,
+                                        // but this will trigger a refresh when user presses 'r'
+                                    });
+                                }
                             }
                         }
                         KeyCode::Char(c) => {
@@ -229,45 +796,77 @@ impl App {
                                     '1' => {
                                         self.state.current_view = ViewType::Search;
                                         self.state.auth_message.clear();
+                                        self.list_state.select(Some(0));
                                     }
                                     '2' => {
                                         self.state.current_view = ViewType::Library;
                                         self.state.auth_message.clear();
+                                        self.list_state.select(Some(0));
                                     }
                                     '3' => {
                                         self.state.current_view = ViewType::Playlists;
                                         self.state.auth_message.clear();
+                                        self.list_state.select(Some(0));
                                     }
                                     '4' => {
-                                        self.state.current_view = ViewType::Albums;
+                                        self.state.current_view = ViewType::Queue;
                                         self.state.auth_message.clear();
+                                        self.list_state.select(Some(0));
+                                        // Auto-load queue when switching to queue view
+                                        self.load_queue().await;
                                     }
                                     '5' => {
+                                        self.state.current_view = ViewType::Albums;
+                                        self.state.auth_message.clear();
+                                        self.list_state.select(Some(0));
+                                    }
+                                    '6' => {
                                         self.state.current_view = ViewType::Artists;
                                         self.state.auth_message.clear();
+                                        self.list_state.select(Some(0));
+                                    }
+                                    '7' => {
+                                        self.state.current_view = ViewType::Errors;
+                                        self.state.auth_message.clear();
+                                        self.list_state.select(Some(0));
                                     }
                                     ' ' => {
-                                        self.toggle_playback();
-                                        self.state.auth_message.clear();
+                                        self.toggle_playback().await;
                                     }
                                     'u' => {
-                                        self.authenticate_user();
+                                        self.authenticate_user().await;
+                                    }
+                                    'r' => {
+                                        self.load_recently_played_from_spotify().await;
+                                    }
+                                    'P' => {
+                                        self.load_user_playlists().await;
+                                    }
+                                    'L' => {
+                                        self.load_liked_songs().await;
+                                    }
+                                    'Q' => {
+                                        self.load_queue().await;
                                     }
                                     'n' => {
-                                        self.next_track();
-                                        self.state.auth_message.clear();
+                                        self.next_track().await;
                                     }
                                     'p' => {
-                                        self.previous_track();
-                                        self.state.auth_message.clear();
+                                        self.previous_track().await;
                                     }
                                     '+' => {
-                                        self.volume_up();
-                                        self.state.auth_message.clear();
+                                        self.volume_up().await;
                                     }
                                     '-' => {
-                                        self.volume_down();
-                                        self.state.auth_message.clear();
+                                        self.volume_down().await;
+                                    }
+                                    'm' => {
+                                        self.log_error("🎵 'm' key pressed - adding selected track to queue".to_string());
+                                        self.add_selected_to_queue().await;
+                                    }
+                                    's' => {
+                                        self.log_error("🔄 's' key pressed - syncing playback state".to_string());
+                                        self.sync_playback_state().await;
                                     }
                                     _ => {
                                         self.state.auth_message.clear();
@@ -280,16 +879,6 @@ impl App {
                                 self.state.search_query.pop();
                             }
                         }
-                        KeyCode::Up => {
-                            if !self.input_mode {
-                                self.move_selection(-1);
-                            }
-                        }
-                        KeyCode::Down => {
-                            if !self.input_mode {
-                                self.move_selection(1);
-                            }
-                        }
                         _ => {}
                     }
                 }
@@ -297,40 +886,35 @@ impl App {
         }
     }
 
-    fn move_selection(&mut self, direction: i32) {
-        if !self.input_mode {
-            let len = self.get_current_list_len();
-            if len > 0 {
-                let current = self.list_state.selected().unwrap_or(0);
-                let new_index = if direction > 0 {
-                    (current + 1) % len
-                } else {
-                    if current == 0 { len - 1 } else { current - 1 }
-                };
-                self.list_state.select(Some(new_index));
-            }
-        }
-    }
+    async fn switch_tab(&mut self, direction: i32) {
+        let tabs = [
+            ViewType::Search,
+            ViewType::Library,
+            ViewType::Playlists,
+            ViewType::Queue,
+            ViewType::Albums,
+            ViewType::Artists,
+            ViewType::Errors,
+        ];
 
-    fn get_current_list_len(&self) -> usize {
+        let current_index = tabs.iter().position(|tab| *tab == self.state.current_view).unwrap_or(0);
+        let new_index = if direction > 0 {
+            (current_index + 1) % tabs.len()
+        } else {
+            if current_index == 0 { tabs.len() - 1 } else { current_index - 1 }
+        };
+
+        self.state.current_view = tabs[new_index].clone();
+        self.state.auth_message.clear();
+        self.list_state.select(Some(0));
+
+        // Auto-load content for specific views when switching to them
         match self.state.current_view {
-            ViewType::Search => {
-                if let Some(ref results) = self.state.search_results {
-                    if let Some(ref tracks) = results.tracks {
-                        tracks.items.len()
-                    } else {
-                        // Show recently played if no search results
-                        self.state.recently_played.len()
-                    }
-                } else {
-                    // Show recently played by default
-                    self.state.recently_played.len()
-                }
+            ViewType::Queue => {
+                // Auto-load queue when switching to queue view
+                self.load_queue().await;
             }
-            ViewType::Playlists => self.state.user_playlists.len(),
-            ViewType::Albums => self.state.user_albums.len(),
-            ViewType::Artists => self.state.user_artists.len(),
-            _ => 0,
+            _ => {}
         }
     }
 
@@ -360,19 +944,21 @@ impl App {
             ])
             .split(area);
 
-        // Library section
+        // Navigation section
         let library_items = vec![
-            ListItem::new("Recently Played"),
-            ListItem::new("Liked Songs"),
-            ListItem::new("Albums"),
-            ListItem::new("Artists"),
-            ListItem::new("Podcasts"),
+            ListItem::new("1. Search"),
+            ListItem::new("2. Library"),
+            ListItem::new("3. Playlists"),
+            ListItem::new("4. Queue"),
+            ListItem::new("5. Albums"),
+            ListItem::new("6. Artists"),
+            ListItem::new("7. Errors/Logs"),
         ];
 
         let library_list = List::new(library_items)
-            .block(Block::default().title("Library").borders(Borders::ALL))
+            .block(Block::default().title("Navigation").borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
         f.render_widget(library_list, sidebar_chunks[0]);
 
@@ -404,7 +990,7 @@ impl App {
         let playlists_list = List::new(playlist_items)
             .block(Block::default().title("Playlists").borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
         f.render_widget(playlists_list, sidebar_chunks[2]);
     }
@@ -414,8 +1000,11 @@ impl App {
             ViewType::Search => self.render_search(f, area),
             ViewType::Library => self.render_library(f, area),
             ViewType::Playlists => self.render_playlists(f, area),
+            ViewType::PlaylistTracks => self.render_playlist_tracks(f, area),
+            ViewType::Queue => self.render_queue(f, area),
             ViewType::Albums => self.render_albums(f, area),
             ViewType::Artists => self.render_artists(f, area),
+            ViewType::Errors => self.render_errors(f, area),
             ViewType::Player => self.render_player_detail(f, area),
         }
     }
@@ -425,6 +1014,12 @@ impl App {
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(3), Constraint::Min(0)])
             .split(area);
+
+        // Split the main area into tracks and preview
+        let content_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+            .split(search_chunks[1]);
 
         // Search input
         let search_style = if self.input_mode {
@@ -463,15 +1058,15 @@ impl App {
                 let tracks_list = List::new(track_items)
                     .block(Block::default().title("🔍 Search Results (↑↓ to navigate, Enter to play)").borders(Borders::ALL))
                     .style(Style::default().fg(Color::White))
-                    .highlight_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Black).bg(Color::White));
+                    .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
-                f.render_stateful_widget(tracks_list, search_chunks[1], &mut self.list_state);
+                f.render_stateful_widget(tracks_list, content_chunks[0], &mut self.list_state);
             }
         } else if !self.state.search_query.is_empty() && self.input_mode {
             // Show "type to search" when in input mode
             let searching_text = Paragraph::new("🔍 Type your search and press Enter...")
-                .block(Block::default().title("Search").borders(Borders::ALL));
-            f.render_widget(searching_text, search_chunks[1]);
+                .block(Block::default().title("Search (press '/' to search)").borders(Borders::ALL));
+            f.render_widget(searching_text, content_chunks[0]);
         } else {
             // Show recently played tracks when not searching
             let recent_items: Vec<ListItem> = self.state.recently_played
@@ -493,21 +1088,104 @@ impl App {
             let tracks_list = List::new(recent_items)
                 .block(Block::default().title("🎵 Recently Played (↑↓ to navigate, Enter to play)").borders(Borders::ALL))
                 .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Black).bg(Color::White));
+                .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
-            f.render_stateful_widget(tracks_list, search_chunks[1], &mut self.list_state);
+            f.render_stateful_widget(tracks_list, content_chunks[0], &mut self.list_state);
         }
+
+        // Render preview panel
+        self.render_track_preview(f, content_chunks[1]);
     }
 
-    fn render_library(&self, f: &mut Frame, area: Rect) {
-        let library_text = Paragraph::new("Your Library\n\nRecently played tracks and saved music will appear here.")
-            .block(Block::default().title("Library").borders(Borders::ALL))
-            .wrap(Wrap { trim: true });
+    fn render_track_preview(&self, f: &mut Frame, area: Rect) {
+        let preview_text = if let Some(selected) = self.list_state.selected() {
+            // Get the selected track
+            let track = if let Some(ref results) = self.state.search_results {
+                if let Some(ref tracks) = results.tracks {
+                    tracks.items.get(selected)
+                } else {
+                    None
+                }
+            } else {
+                self.state.recently_played.get(selected)
+            };
 
-        f.render_widget(library_text, area);
+            if let Some(track) = track {
+                let artist_names = track
+                    .artists
+                    .iter()
+                    .map(|a| a.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let album_name = track
+                    .album
+                    .as_ref()
+                    .map(|a| a.name.clone())
+                    .unwrap_or("Unknown Album".to_string());
+
+                let duration_seconds = track.duration_ms / 1000;
+                let duration_formatted = format!("{}:{:02}", duration_seconds / 60, duration_seconds % 60);
+
+                format!(
+                    "🎵 {}\n\n👤 Artist(s):\n{}\n\n💿 Album:\n{}\n\n⏱️ Duration:\n{}\n\n🎚️ Popularity:\n{}/100\n\n🆔 Track ID:\n{}",
+                    track.name,
+                    artist_names,
+                    album_name,
+                    duration_formatted,
+                    track.popularity,
+                    track.id
+                )
+            } else {
+                "No track selected".to_string()
+            }
+        } else {
+            "Select a track to see preview".to_string()
+        };
+
+        let preview_widget = Paragraph::new(preview_text)
+            .block(Block::default().borders(Borders::ALL).title("🔍 Track Preview"))
+            .wrap(Wrap { trim: true })
+            .style(Style::default().fg(Color::Cyan));
+
+        f.render_widget(preview_widget, area);
     }
 
-    fn render_playlists(&self, f: &mut Frame, area: Rect) {
+    fn render_library(&mut self, f: &mut Frame, area: Rect) {
+        let library_items: Vec<ListItem> = if self.state.liked_songs.is_empty() {
+            vec![
+                ListItem::new("No liked songs loaded"),
+                ListItem::new("Press 'L' to load your liked songs"),
+                ListItem::new(""),
+                ListItem::new("Sample Liked Songs:"),
+                ListItem::new("♥ Bohemian Rhapsody - Queen"),
+                ListItem::new("♥ Hotel California - Eagles"),
+                ListItem::new("♥ Stairway to Heaven - Led Zeppelin"),
+                ListItem::new("♥ Sweet Child O' Mine - Guns N' Roses"),
+                ListItem::new("♥ Imagine - John Lennon"),
+            ]
+        } else {
+            self.state.liked_songs
+                .iter()
+                .enumerate()
+                .map(|(i, track)| {
+                    let artists = track.artists.iter()
+                        .map(|a| a.name.clone())
+                        .collect::<Vec<String>>()
+                        .join(", ");
+                    ListItem::new(format!("{}. ♥ {} - {}", i + 1, track.name, artists))
+                })
+                .collect()
+        };
+
+        let library_list = List::new(library_items)
+            .block(Block::default().title("🎵 Liked Songs (↑↓ to navigate, Enter to play, L to load)").borders(Borders::ALL))
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
+        f.render_stateful_widget(library_list, area, &mut self.list_state);
+    }
+
+    fn render_playlists(&mut self, f: &mut Frame, area: Rect) {
         let playlist_items: Vec<ListItem> = if self.state.user_playlists.is_empty() {
             vec![
                 ListItem::new("Metallica - Metallica"),
@@ -529,11 +1207,94 @@ impl App {
         };
 
         let playlists_list = List::new(playlist_items)
-            .block(Block::default().title("Albums").borders(Borders::ALL))
+            .block(Block::default().title("🎵 Playlists (↑↓ to navigate, Enter to open)").borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
-        f.render_widget(playlists_list, area);
+        f.render_stateful_widget(playlists_list, area, &mut self.list_state);
+    }
+
+    fn render_playlist_tracks(&mut self, f: &mut Frame, area: Rect) {
+        let title = if let Some(ref playlist) = self.state.selected_playlist {
+            format!("🎵 {} (↑↓ to navigate, Enter to play, Esc to go back)", playlist.name)
+        } else {
+            "🎵 Playlist Tracks".to_string()
+        };
+
+        let track_items: Vec<ListItem> = self.state.selected_playlist_tracks
+            .iter()
+            .map(|track| {
+                let artists = track.artists.iter()
+                    .map(|a| a.name.clone())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                ListItem::new(format!("{} - {}", track.name, artists))
+            })
+            .collect();
+
+        let tracks_list = List::new(track_items)
+            .block(Block::default().title(title).borders(Borders::ALL))
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        f.render_stateful_widget(tracks_list, area, &mut self.list_state);
+    }
+
+    fn render_queue(&mut self, f: &mut Frame, area: Rect) {
+        let queue_items: Vec<ListItem> = if self.state.queue.is_empty() {
+            vec![
+                ListItem::new("No tracks in queue"),
+                ListItem::new("Select a track and press 'm' to add"),
+            ]
+        } else {
+            self.state.queue
+                .iter()
+                .enumerate()
+                .map(|(i, track)| {
+                    let artist_names: String = track
+                        .artists
+                        .iter()
+                        .map(|a| a.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    let item_text = format!("{}. {} - {}", i + 1, track.name, artist_names);
+                    ListItem::new(item_text)
+                })
+                .collect()
+        };
+
+        let queue_list = List::new(queue_items)
+            .block(Block::default().title("🎵 Queue (↑↓ to navigate, Enter to play, Q to refresh)").borders(Borders::ALL))
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+        f.render_stateful_widget(queue_list, area, &mut self.list_state);
+    }
+
+    fn render_errors(&mut self, f: &mut Frame, area: Rect) {
+        let error_items: Vec<ListItem> = if self.state.error_logs.is_empty() {
+            vec![
+                ListItem::new("No errors or logs yet"),
+                ListItem::new("Use 'm' to add tracks and see logs here"),
+            ]
+        } else {
+            // Show logs in reverse order (newest first)
+            self.state.error_logs
+                .iter()
+                .rev()
+                .enumerate()
+                .map(|(i, log)| {
+                    ListItem::new(format!("{}. {}", i + 1, log))
+                })
+                .collect()
+        };
+
+        let errors_list = List::new(error_items)
+            .block(Block::default().title("🚨 Errors & Logs (Press '7' to view, newest first)").borders(Borders::ALL))
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+        f.render_stateful_widget(errors_list, area, &mut self.list_state);
     }
 
     fn render_albums(&self, f: &mut Frame, area: Rect) {
@@ -556,7 +1317,7 @@ impl App {
         let albums_list = List::new(album_items)
             .block(Block::default().title("Artists").borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
         f.render_widget(albums_list, area);
     }
@@ -589,7 +1350,7 @@ impl App {
         let artists_list = List::new(artist_items)
             .block(Block::default().title("Playlists").borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
         f.render_widget(artists_list, area);
     }
@@ -636,7 +1397,7 @@ impl App {
 
         // Player controls
         let play_status = if self.state.is_playing { "⏸ Pause" } else { "▶ Play" };
-        let controls = format!("⏮ Prev | {} | Next ⏭\n\nControls:\nSpace: Play/Pause\nn: Next | p: Previous\n+/-: Volume | u: Auth", play_status);
+        let controls = format!("⏮ Prev | {} | Next ⏭\n\nControls:\nEnter: Play | m: Add Selected to Queue\nSpace: Play/Pause | /: Search | ↑↓: Navigate\nn: Next | p: Previous | Alt+R: Prev | Alt+T: Next | q: Quit\n+/-: Volume | u: Auth | r: Refresh Recent | P: Refresh Playlists | L: Load Liked Songs | Q: Refresh Queue\n1-7: Switch Views | Ctrl+←→: Switch Tabs (7=Errors/Logs)", play_status);
         let controls_color = if self.state.user_authenticated { Color::Green } else { Color::Yellow };
         let controls_widget = Paragraph::new(controls)
             .block(Block::default().borders(Borders::ALL).title("Controls"))

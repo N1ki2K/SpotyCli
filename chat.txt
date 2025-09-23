@@ -1,0 +1,125 @@
+# SpotyCli Development Session Summary
+
+## Project Overview
+- Built a terminal-based Spotify client in Rust using Spotify Web API
+- Uses Ratatui for TUI, Tokio for async, and implements real playback controls
+- Three-panel layout: sidebar (library/playlists), main content (search/tracks), bottom player
+
+## Key Features Implemented
+✅ **Authentication & API Integration**
+- OAuth 2.0 PKCE flow for user authentication
+- Separate binary for authentication: `cargo run --bin authenticate`
+- Token persistence in `.spotify_tokens` file
+- Client Credentials flow for basic API access
+
+✅ **Real Music Playback**
+- Play tracks with Enter key (uses real Spotify API)
+- Space bar: play/pause toggle
+- n/p: next/previous track
+- +/-: volume control
+- All controls work with actual Spotify playback
+
+✅ **Search & Navigation**
+- Press `/` to search, type query, Enter to search
+- Real Spotify API search results (not mock data)
+- Arrow keys (↑/↓) for navigation
+- Shows "Recently Played" by default, switches to search results when searching
+
+✅ **Device Detection & Troubleshooting**
+- 5-second startup delay with option to press 'u' for device check
+- Shows available Spotify devices and which are active
+- Clear error messages for common issues (no devices, premium required, etc.)
+
+## File Structure
+```
+src/
+├── main.rs           # Main entry point with startup device check
+├── auth/mod.rs       # OAuth 2.0 PKCE authentication
+├── api/mod.rs        # Spotify Web API client
+├── models/mod.rs     # Data structures (Track, Artist, Album, etc.)
+└── ui/mod.rs         # Terminal UI with real playback controls
+
+src/bin/
+└── authenticate.rs   # Separate authentication binary
+```
+
+## Usage Instructions
+
+### First Time Setup
+1. Get Spotify API credentials from https://developer.spotify.com/dashboard/
+2. Set environment variables or create `.env` file:
+   ```
+   SPOTIFY_CLIENT_ID=your_client_id_here
+   SPOTIFY_CLIENT_SECRET=your_client_secret_here
+   ```
+
+### Authentication for Playback
+1. Run: `cargo run --bin authenticate`
+2. Follow browser authentication flow
+3. Tokens saved to `.spotify_tokens`
+
+### Running the App
+1. `cargo run`
+2. **NEW**: 5-second startup - press 'u' to check Spotify devices
+3. Use the app:
+   - `/` - search for music
+   - ↑/↓ - navigate tracks
+   - Enter - play selected track
+   - Space - play/pause
+   - n/p - next/previous
+   - +/- - volume
+   - u - check device status
+   - q - quit
+
+## Issues Fixed in This Session
+
+### 1. Navigation Not Working
+**Problem**: Arrow keys didn't work for track selection
+**Solution**: Fixed `move_selection()` function and proper `ListState` handling
+
+### 2. Search Results Format Issues
+**Problem**: Search showed "test - Nothing Else Matters - Metallica" format
+**Solution**: Updated to use real Spotify API search, proper track formatting
+
+### 3. Playback Not Working
+**Problem**: No actual music playback - just UI placeholders
+**Solution**:
+- Connected all UI controls to real Spotify API calls
+- Made functions async to handle API calls
+- Added proper error handling with specific messages
+
+### 4. Audio Troubleshooting
+**Problem**: User couldn't hear music
+**Solution**:
+- Added device detection functionality
+- 5-second startup delay with 'u' option to check devices
+- Clear error messages for common issues:
+  - No active devices
+  - Spotify Premium required
+  - No devices found
+
+## Current Status
+✅ **Fully Functional Spotify Terminal Client**
+- Real authentication with Spotify
+- Real music playback and controls
+- Device detection and troubleshooting
+- Search with real Spotify API
+- Proper navigation and UI
+
+## Requirements for Playback
+1. **Spotify Premium account** (required for playback API)
+2. **Active Spotify device** (desktop app, mobile, or web player)
+3. **Authentication tokens** (run authenticate binary first)
+4. **Device must be "active"** (start playing something in Spotify first)
+
+## Common Troubleshooting
+- Press 'u' at startup or in-app to check device status
+- If "No active device": Open Spotify app and start playing something
+- If "Premium required": Need Spotify Premium for playback control
+- If "No devices found": Make sure Spotify app is running
+
+## Next Steps (if needed)
+- Could add playlist creation/management
+- Could add current playback status display
+- Could add more advanced search filters
+- Could add queue management

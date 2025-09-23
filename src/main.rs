@@ -7,6 +7,7 @@ use anyhow::Result;
 use dotenv::dotenv;
 use std::env;
 use std::fs;
+use std::io;
 use tokio;
 
 use api::SpotifyClient;
@@ -56,6 +57,119 @@ async fn main() -> Result<()> {
     }
 
     println!("🎵 Starting SpotyCli...");
+    println!("💡 Press 'u' within 5 seconds to check Spotify devices, or wait to continue...");
+
+    // Give user 5 seconds to press 'u' for device check
+    use crossterm::{
+        event::{self, Event, KeyCode, KeyEventKind},
+        terminal::{enable_raw_mode, disable_raw_mode},
+    };
+    use std::time::{Duration, Instant};
+
+    let start_time = Instant::now();
+    let timeout = Duration::from_secs(5);
+    let mut should_check_devices = false;
+
+    // Enable raw mode for input detection
+    enable_raw_mode()?;
+
+    while start_time.elapsed() < timeout {
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('u') {
+                    should_check_devices = true;
+                    break;
+                }
+            }
+        }
+
+        let remaining = timeout.saturating_sub(start_time.elapsed()).as_secs();
+        print!("\r⏱️  Device check in {} seconds (press 'u' now)...  ", remaining);
+        io::Write::flush(&mut io::stdout())?;
+    }
+
+    disable_raw_mode()?;
+    println!("\r                                                    \r"); // Clear the countdown line
+
+    // If user pressed 'u', check devices before starting
+    if should_check_devices {
+        println!("🔍 Checking Spotify devices...");
+
+        let mut temp_client = SpotifyClient::new(client_id.clone(), client_secret.clone());
+        temp_client.authenticate().await?;
+
+        if user_authenticated {
+            if let Ok(tokens_data) = std::fs::read_to_string(".spotify_tokens") {
+                if let Ok(user_tokens) = serde_json::from_str::<UserTokens>(&tokens_data) {
+                    temp_client.set_user_tokens(user_tokens);
+
+                    match temp_client.get_available_devices().await {
+                        Ok(devices) => {
+                            if devices.devices.is_empty() {
+                                println!("❌ No Spotify devices found!");
+                                println!("💡 Would you like me to launch Spotify in the background? (y/n)");
+
+                                let mut input = String::new();
+                                io::stdin().read_line(&mut input)?;
+
+                                if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
+                                    match SpotifyClient::launch_spotify_background() {
+                                        Ok(_) => {
+                                            println!("⏳ Waiting for Spotify to start...");
+                                            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+                                            // Check devices again after launching
+                                            match temp_client.get_available_devices().await {
+                                                Ok(new_devices) => {
+                                                    if new_devices.devices.is_empty() {
+                                                        println!("⚠️  Spotify launched but no devices detected yet. Try starting playback in Spotify.");
+                                                    } else {
+                                                        println!("✅ Found {} Spotify device(s) after launch:", new_devices.devices.len());
+                                                        for device in &new_devices.devices {
+                                                            let status = if device.is_active { "🔊 ACTIVE" } else { "⏸️  Inactive" };
+                                                            println!("   - {} ({}): {}", device.name, device.device_type, status);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    println!("❌ Failed to check devices after launch: {}", e);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            println!("❌ Failed to launch Spotify: {}", e);
+                                            println!("💡 Please manually open Spotify app and start playing something.");
+                                        }
+                                    }
+                                } else {
+                                    println!("💡 Please manually open Spotify app (desktop, mobile, or web) and start playing something.");
+                                }
+                            } else {
+                                println!("✅ Found {} Spotify device(s):", devices.devices.len());
+                                for device in &devices.devices {
+                                    let status = if device.is_active { "🔊 ACTIVE" } else { "⏸️  Inactive" };
+                                    println!("   - {} ({}): {}", device.name, device.device_type, status);
+                                }
+
+                                let active_count = devices.devices.iter().filter(|d| d.is_active).count();
+                                if active_count == 0 {
+                                    println!("⚠️  No devices are currently active. Start playing something in Spotify first.");
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            println!("❌ Failed to check devices: {}", e);
+                        }
+                    }
+                }
+            }
+        } else {
+            println!("❌ Not authenticated for playback. Run: cargo run --bin authenticate");
+        }
+
+        println!("Press Enter to continue...");
+        io::stdin().read_line(&mut String::new())?;
+    }
 
     // Setup terminal
     let mut terminal = setup_terminal()?;
@@ -71,7 +185,14 @@ async fn main() -> Result<()> {
     // Set authentication status if tokens were loaded
     app.state.user_authenticated = user_authenticated;
 
-    let result = app.run(&mut terminal);
+    // Auto-load playlists and liked songs if user is authenticated
+    if user_authenticated {
+        app.load_user_playlists().await;
+        app.load_recently_played_from_spotify().await;
+        app.load_liked_songs().await;
+    }
+
+    let result = app.run(&mut terminal).await;
 
     // Restore terminal
     restore_terminal(&mut terminal)?;
