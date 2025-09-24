@@ -343,6 +343,7 @@ impl App {
             if let Some(track) = track {
                 if self.state.user_authenticated {
                     if let Some(ref client) = self.spotify_client {
+                        let client_clone = client.clone(); // Clone early to avoid borrowing issues
                         let play_result = match self.state.current_view {
                             ViewType::PlaylistTracks => {
                                 // Play playlist with context for continuous playback
@@ -370,15 +371,65 @@ impl App {
                                     client.play_tracks_with_offset(&track_uris, selected).await
                                 }
                             }
+                            ViewType::Search | ViewType::Albums | ViewType::Artists | ViewType::Queue => {
+                                // For individual tracks from search/albums/artists/queue, start radio to continue with similar songs
+                                match client.start_radio_from_track(&track.uri).await {
+                                    Ok(logs) => {
+                                        // Add all radio logs to the error logs tab
+                                        for log in logs {
+                                            self.log_radio(log);
+                                        }
+                                        Ok(())
+                                    }
+                                    Err(e) => Err(e)
+                                }
+                            }
                             _ => {
-                                // For other views, play individual track
-                                client.play_track(&track.uri).await
+                                // For other views like recently played, also start radio
+                                match client.start_radio_from_track(&track.uri).await {
+                                    Ok(logs) => {
+                                        // Add all radio logs to the error logs tab
+                                        for log in logs {
+                                            self.log_radio(log);
+                                        }
+                                        Ok(())
+                                    }
+                                    Err(e) => Err(e)
+                                }
                             }
                         };
 
                         match play_result {
                             Ok(_) => {
-                                self.state.auth_message = format!("▶ Playing: {} (with playlist context)", track.name);
+                                // Clear the current queue when starting a new song
+                                self.state.queue.clear();
+                                self.log_radio("🔄 Queue cleared - starting fresh".to_string());
+
+                                // Load the new queue after a short delay to allow Spotify to populate it
+                                tokio::spawn({
+                                    let client_for_spawn = client_clone.clone();
+                                    async move {
+                                        // Wait a moment for Spotify to populate the queue with new tracks
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+                                        let _ = client_for_spawn.get_queue().await;
+                                    }
+                                });
+
+                                let message = match self.state.current_view {
+                                    ViewType::Search | ViewType::Albums | ViewType::Artists | ViewType::Queue => {
+                                        format!("📻 Starting radio: {} (Building playlist with similar tracks...)", track.name)
+                                    }
+                                    ViewType::PlaylistTracks => {
+                                        format!("▶ Playing from playlist: {}", track.name)
+                                    }
+                                    ViewType::LikedSongs => {
+                                        format!("❤️ Playing from liked songs: {}", track.name)
+                                    }
+                                    _ => {
+                                        format!("📻 Starting radio: {} (Building playlist with similar tracks...)", track.name)
+                                    }
+                                };
+                                self.state.auth_message = message;
                                 self.state.current_track = Some(track.clone());
                                 self.state.is_playing = true;
 
@@ -651,6 +702,17 @@ impl App {
         }
     }
 
+    fn log_radio(&mut self, message: String) {
+        let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
+        let log_entry = format!("[{}] RADIO: {}", timestamp, message);
+        self.state.error_logs.push(log_entry);
+
+        // Keep only last 100 log entries
+        if self.state.error_logs.len() > 100 {
+            self.state.error_logs.remove(0);
+        }
+    }
+
     async fn add_selected_to_queue(&mut self) {
         let user_authenticated = self.state.user_authenticated;
         let current_view = self.state.current_view.clone();
@@ -715,7 +777,18 @@ impl App {
                     if let Some(client) = self.spotify_client.clone() {
                         match client.add_to_queue(&track.uri).await {
                             Ok(_) => {
-                                self.state.auth_message = format!("➕ Added to queue: {}", track.name);
+                                self.state.auth_message = format!("🚀 Added to queue (high priority): {}", track.name);
+                                self.log_radio(format!("🚀 HIGH PRIORITY: {} added to queue", track.name));
+
+                                // Refresh the queue after a short delay to get the updated queue
+                                // and move manually added tracks to higher priority
+                                tokio::spawn({
+                                    let client_clone = client.clone();
+                                    async move {
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                                        let _ = client_clone.get_queue().await;
+                                    }
+                                });
                             },
                             Err(e) => {
                                 self.log_error(format!("❌ QUEUE ERROR: {}", e));
@@ -1502,27 +1575,131 @@ impl App {
     }
 
     fn render_queue(&mut self, f: &mut Frame, area: Rect) {
+        // Auto-load queue when entering this view
+        if self.state.queue.is_empty() && self.state.user_authenticated {
+            // Trigger queue load (this will be async, so display loading message)
+            tokio::spawn({
+                let client = self.spotify_client.clone();
+                async move {
+                    if let Some(client) = client {
+                        let _ = client.get_queue().await;
+                    }
+                }
+            });
+        }
+
         let queue_items: Vec<ListItem> = if self.state.queue.is_empty() {
             vec![
-                ListItem::new("No tracks in queue"),
-                ListItem::new("Select a track and press 'm' to add"),
+                ListItem::new("╔══════════════════════════════════════════════╗"),
+                ListItem::new("║             🎵 QUEUE IS EMPTY                ║"),
+                ListItem::new("╠══════════════════════════════════════════════╣"),
+                ListItem::new("║  • Press 'Q' to refresh queue                ║"),
+                ListItem::new("║  • Press 'm' on any track to add to queue    ║"),
+                ListItem::new("║  • Play songs from Search/Recently Played    ║"),
+                ListItem::new("║    to auto-populate similar tracks           ║"),
+                ListItem::new("╚══════════════════════════════════════════════╝"),
             ]
         } else {
-            self.state.queue
-                .iter()
-                .enumerate()
-                .map(|(i, track)| {
-                    let artist_names: String = track
-                        .artists
-                        .iter()
-                        .map(|a| a.name.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ");
+            let mut items = vec![];
 
-                    let item_text = format!("{}. {} - {}", i + 1, track.name, artist_names);
-                    ListItem::new(item_text)
-                })
-                .collect()
+            // Calculate maximum song name length to determine column width first
+            let base_track_width = 33; // minimum width
+            let max_track_width = 50; // maximum width to prevent too much expansion
+            let mut actual_track_width = base_track_width;
+
+            // Find the longest track name that would need more space
+            for track in &self.state.queue {
+                let display_len = if track.name.len() > max_track_width - 3 {
+                    max_track_width
+                } else {
+                    track.name.len().max(base_track_width)
+                };
+                actual_track_width = actual_track_width.max(display_len);
+            }
+
+            let artist_width = 20;
+            let time_width = 4;
+
+            // Add header section with dynamic widths
+            items.push(ListItem::new(""));
+
+            // Simple clean table design
+            let track_col_width = actual_track_width + 4; // +4 for "  # " or " ▶ " prefix
+
+            // Build the header without outer borders
+            items.push(ListItem::new("              UP NEXT              "));
+            items.push(ListItem::new(""));
+
+            let column_header = format!("  # {:<width$} │ {:<artist_width$} │ {:^time_width$}",
+                "TRACK NAME",
+                "ARTIST",
+                "TIME",
+                width = actual_track_width,
+                artist_width = artist_width,
+                time_width = time_width);
+            items.push(ListItem::new(column_header));
+
+            // Make separator match the exact column spacing of data rows
+            let separator = format!("{}─┼─{}─┼─{}",
+                "─".repeat(track_col_width),
+                "─".repeat(artist_width),
+                "─".repeat(time_width));
+            items.push(ListItem::new(separator));
+
+            // Add queue items with dynamic formatting
+            for (i, track) in self.state.queue.iter().enumerate() {
+                let artist_names: String = track
+                    .artists
+                    .iter()
+                    .map(|a| a.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let duration_sec = track.duration_ms / 1000;
+                let duration_formatted = format!("{}:{:02}", duration_sec / 60, duration_sec % 60);
+
+                // Use dynamic track name formatting - don't truncate unless absolutely necessary
+                let track_name = if track.name.len() > actual_track_width {
+                    format!("{}...", &track.name[..actual_track_width - 3])
+                } else {
+                    track.name.clone()
+                };
+
+                let artists_display = if artist_names.len() > artist_width {
+                    format!("{}...", &artist_names[..artist_width - 3])
+                } else {
+                    artist_names
+                };
+
+                let item_text = if i == 0 {
+                    format!(" ▶ {:<width$} │ {:<artist_width$} │ {:>time_width$}",
+                           track_name,
+                           artists_display,
+                           duration_formatted,
+                           width = actual_track_width,
+                           artist_width = artist_width,
+                           time_width = time_width)
+                } else {
+                    format!("{:>2}. {:<width$} │ {:<artist_width$} │ {:>time_width$}",
+                           i + 1,
+                           track_name,
+                           artists_display,
+                           duration_formatted,
+                           width = actual_track_width,
+                           artist_width = artist_width,
+                           time_width = time_width)
+                };
+                items.push(ListItem::new(item_text));
+            }
+
+            // No footer border needed
+            items.push(ListItem::new(""));
+            let total_tracks = self.state.queue.len();
+            let total_duration: u32 = self.state.queue.iter().map(|t| t.duration_ms).sum();
+            let total_minutes = (total_duration / 1000) / 60;
+            items.push(ListItem::new(format!("📊 {} tracks • ~{} minutes total", total_tracks, total_minutes)));
+
+            items
         };
 
         let queue_list = List::new(queue_items)
@@ -1536,8 +1713,8 @@ impl App {
     fn render_errors(&mut self, f: &mut Frame, area: Rect) {
         let error_items: Vec<ListItem> = if self.state.error_logs.is_empty() {
             vec![
-                ListItem::new("No errors or logs yet"),
-                ListItem::new("Use 'm' to add tracks and see logs here"),
+                ListItem::new("No errors or radio logs yet"),
+                ListItem::new("Play tracks from search/recently played to see radio logs here"),
             ]
         } else {
             // Show logs in reverse order (newest first)
@@ -1552,7 +1729,7 @@ impl App {
         };
 
         let errors_list = List::new(error_items)
-            .block(Block::default().title("🚨 Errors & Logs (Press '7' to view, newest first)").borders(Borders::ALL))
+            .block(Block::default().title("📻 Radio Logs & Errors (Press '7' to view, newest first)").borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
             .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 

@@ -281,6 +281,22 @@ impl SpotifyClient {
         Ok(())
     }
 
+    pub async fn set_repeat(&self, state: &str) -> Result<()> {
+        let endpoint = format!("me/player/repeat?state={}", state);
+        let empty_body = serde_json::json!({});
+        self.make_user_request_no_response("PUT", &endpoint, Some(empty_body)).await?;
+        Ok(())
+    }
+
+    pub async fn enable_autoplay(&self) -> Result<()> {
+        // Try to enable autoplay through shuffle and repeat settings
+        let _ = self.set_shuffle(false).await; // Disable shuffle first
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+        let _ = self.set_repeat("off").await; // Set repeat to off to allow autoplay
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+        Ok(())
+    }
+
     pub async fn get_available_devices(&self) -> Result<DeviceList> {
         self.make_user_request("GET", "me/player/devices", None).await
     }
@@ -344,6 +360,172 @@ impl SpotifyClient {
 
     pub async fn get_queue(&self) -> Result<QueueResponse> {
         self.make_user_request("GET", "me/player/queue", None).await
+    }
+
+    pub async fn get_recommendations(&self, track_id: &str, limit: u32) -> Result<(serde_json::Value, Vec<String>)> {
+        let mut logs = Vec::new();
+        let endpoint = format!("recommendations?seed_tracks={}&limit={}", track_id, limit.min(100));
+
+        // Debug: Check if we have user authentication
+        if self.user_tokens.is_none() {
+            let error_msg = "No user authentication tokens available for recommendations".to_string();
+            logs.push(format!("❌ {}", error_msg));
+            return Err(anyhow!(error_msg));
+        }
+
+        logs.push(format!("🔍 Requesting recommendations for track: {}", track_id));
+        logs.push(format!("🔗 API endpoint: {}", endpoint));
+
+        match self.make_user_request("GET", &endpoint, None).await {
+            Ok(response) => {
+                logs.push("✅ Recommendations API call successful".to_string());
+                Ok((response, logs))
+            }
+            Err(e) => {
+                logs.push(format!("❌ Recommendations API failed: {}", e));
+                logs.push("🔄 Trying fallback approach using artist data...".to_string());
+
+                match self.get_fallback_recommendations_with_logs(track_id, logs).await {
+                    Ok((response, final_logs)) => Ok((response, final_logs)),
+                    Err((error, final_logs)) => {
+                        // Return error but also return logs for display
+                        eprintln!("Final error: {}", error);
+                        for log in &final_logs {
+                            eprintln!("{}", log);
+                        }
+                        Err(anyhow!("Recommendations failed: {}", error))
+                    }
+                }
+            }
+        }
+    }
+
+
+    async fn get_fallback_recommendations_with_logs(&self, track_id: &str, mut logs: Vec<String>) -> Result<(serde_json::Value, Vec<String>), (String, Vec<String>)> {
+        // Get the track first to find the artist
+        match self.get_track(track_id).await {
+            Ok(track) => {
+                if let Some(artist) = track.artists.first() {
+                    logs.push(format!("🎤 Getting top tracks for artist: {}", artist.name));
+
+                    // Get artist's top tracks as recommendations
+                    let endpoint = format!("artists/{}/top-tracks?market=US", artist.id);
+                    match self.make_user_request::<serde_json::Value>("GET", &endpoint, None).await {
+                        Ok(response) => {
+                            // Format response to match recommendations format
+                            if let Some(tracks) = response.get("tracks") {
+                                let formatted_response = serde_json::json!({
+                                    "tracks": tracks
+                                });
+                                logs.push(format!("✅ Got {} artist top tracks as fallback",
+                                    tracks.as_array().map(|t| t.len()).unwrap_or(0)));
+                                return Ok((formatted_response, logs));
+                            }
+                        }
+                        Err(e) => {
+                            logs.push(format!("❌ Fallback also failed: {}", e));
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                logs.push(format!("❌ Could not get track info for fallback: {}", e));
+            }
+        }
+
+        Err(("Both recommendations and fallback failed".to_string(), logs))
+    }
+
+    pub async fn start_radio_from_track(&self, track_uri: &str) -> Result<Vec<String>> {
+        let mut radio_logs = Vec::new();
+        // Extract track ID from URI (format: spotify:track:TRACK_ID)
+        let track_id = track_uri.strip_prefix("spotify:track:")
+            .ok_or_else(|| anyhow!("Invalid track URI format"))?;
+
+        radio_logs.push("📻 Starting radio mode for track...".to_string());
+
+        // First, play the selected track
+        self.play_track(track_uri).await?;
+        radio_logs.push("▶️  Playing your selected track".to_string());
+
+        // Configure playback settings for autoplay
+        tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+        let _ = self.enable_autoplay().await;
+        radio_logs.push("🔄 Configured playback settings for autoplay".to_string());
+
+        // Try to get recommendations, with multiple fallback approaches
+        let recommendations_result = self.get_recommendations(track_id, 20).await;
+
+        match recommendations_result {
+            Ok((recommendations, logs)) => {
+                // Add all the API activity logs
+                radio_logs.extend(logs);
+
+                if let Some(tracks) = recommendations.get("tracks").and_then(|t| t.as_array()) {
+                    radio_logs.push(format!("🎵 Found {} recommended tracks, adding to queue...", tracks.len()));
+
+                    let mut added_count = 0;
+                    for (i, track) in tracks.iter().enumerate().take(15) {
+                        if let Some(uri) = track.get("uri").and_then(|u| u.as_str()) {
+                            if let Some(name) = track.get("name").and_then(|n| n.as_str()) {
+                                // Add delay between queue additions to avoid rate limiting
+                                if i > 0 {
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                                }
+
+                                match self.add_to_queue(uri).await {
+                                    Ok(_) => {
+                                        added_count += 1;
+                                        radio_logs.push(format!("  ✅ Added: {}", name));
+                                    }
+                                    Err(e) => {
+                                        radio_logs.push(format!("  ❌ Failed to add '{}': {}", name, e));
+                                        // Don't break, continue with other tracks
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if added_count > 0 {
+                        radio_logs.push(format!("🎶 Successfully added {} similar tracks to queue!", added_count));
+                        radio_logs.push("🔄 Radio mode active - tracks will continue playing automatically".to_string());
+
+                        // Final settings to ensure continuous playback
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        let _ = self.set_repeat("off").await; // Allow queue to flow naturally
+
+                        // Debug: Check what's actually in the queue
+                        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                        match self.get_queue().await {
+                            Ok(queue_response) => {
+                                radio_logs.push(format!("📋 Current queue has {} tracks", queue_response.queue.len()));
+                                for (i, track) in queue_response.queue.iter().take(3).enumerate() {
+                                    radio_logs.push(format!("  {}. {}", i + 1, track.name));
+                                }
+                                if queue_response.queue.len() > 3 {
+                                    radio_logs.push(format!("  ... and {} more", queue_response.queue.len() - 3));
+                                }
+                            }
+                            Err(e) => {
+                                radio_logs.push(format!("❌ Could not check queue status: {}", e));
+                            }
+                        }
+                    } else {
+                        radio_logs.push("⚠️  Could not add any tracks to queue - check your Spotify device".to_string());
+                        radio_logs.push("💡 Make sure you have an active Spotify device and Premium account".to_string());
+                    }
+                } else {
+                    radio_logs.push("⚠️  No tracks found in recommendations response".to_string());
+                }
+            }
+            Err(e) => {
+                radio_logs.push(format!("❌ Failed to get recommendations: {}", e));
+                radio_logs.push("💡 Playing single track - recommendations require user authentication".to_string());
+            }
+        }
+
+        Ok(radio_logs)
     }
 
     pub async fn like_song(&self, track_id: &str) -> Result<()> {

@@ -106,7 +106,7 @@ impl SpotifyAuth {
                 ("code_challenge_method", "S256"),
                 ("code_challenge", &code_challenge),
                 ("state", &state),
-                ("scope", "user-read-playback-state user-modify-playback-state user-read-currently-playing streaming user-library-read playlist-read-private playlist-read-collaborative"),
+                ("scope", "user-read-playback-state user-modify-playback-state user-read-currently-playing streaming user-library-read playlist-read-private playlist-read-collaborative user-read-recently-played"),
             ]
             .iter()
             .map(|(k, v)| format!("{}={}", k, urlencoding::encode(v)))
