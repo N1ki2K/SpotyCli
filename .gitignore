@@ -1,2 +1,15 @@
+# Tokens and secrets
 .spotify_tokens
 .env
+
+# Rust build artifacts
+/target/
+
+# Spotify API cache
+.spotify_recently_played
+
+# Development files
+chat.txt
+controls.txt
+test_controls.md
+keys.txt

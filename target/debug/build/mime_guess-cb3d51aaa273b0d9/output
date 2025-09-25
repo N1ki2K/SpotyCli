@@ -1,1 +1,0 @@
-cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/home/shrek/Documents/Projects/SpotyCli/target/debug/build/mime_guess-cb3d51aaa273b0d9/out/mime_types_generated.rs
