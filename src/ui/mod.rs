@@ -168,14 +168,24 @@ impl App {
     pub async fn load_user_playlists(&mut self) {
         if self.state.user_authenticated {
             if let Some(ref client) = self.spotify_client {
-                self.state.auth_message = "🔄 Loading playlists...".to_string();
-                match client.get_user_playlists(50, 0).await {
-                    Ok(response) => {
-                        self.state.user_playlists = response.items;
-                        self.state.auth_message = format!("✅ Loaded {} playlists", self.state.user_playlists.len());
+                self.state.auth_message = "🔄 Loading ALL playlists...".to_string();
+                match client.get_all_user_playlists().await {
+                    Ok(all_playlists) => {
+                        self.state.user_playlists = all_playlists;
+                        self.state.auth_message = format!("✅ Loaded ALL {} playlists", self.state.user_playlists.len());
                     },
                     Err(e) => {
-                        self.state.auth_message = format!("⚠️ Failed to load playlists: {}", e);
+                        self.state.auth_message = format!("❌ Failed to load all playlists: {}", e);
+                        // Fallback to loading first 50 playlists
+                        match client.get_user_playlists(50, 0).await {
+                            Ok(response) => {
+                                self.state.user_playlists = response.items;
+                                self.state.auth_message = format!("⚠️ Loaded first {} playlists only", self.state.user_playlists.len());
+                            },
+                            Err(_) => {
+                                self.state.auth_message = format!("❌ Failed to load playlists: {}", e);
+                            }
+                        }
                     }
                 }
             } else {
@@ -210,25 +220,40 @@ impl App {
     pub async fn load_selected_playlist_tracks(&mut self, playlist_id: &str) {
         if self.state.user_authenticated {
             if let Some(ref client) = self.spotify_client {
-                self.state.auth_message = "🔄 Loading playlist tracks...".to_string();
-                match client.get_playlist_tracks(playlist_id, 50, 0).await {
-                    Ok(tracks_response) => {
-                        if let Some(items) = tracks_response.items {
-                            self.state.selected_playlist_tracks = items
-                                .into_iter()
-                                .filter_map(|item| item.track)
-                                .collect();
-                            self.state.current_view = ViewType::PlaylistTracks;
-                            self.list_state.select(Some(0)); // Reset selection to first item
-                            self.state.auth_message = format!("✅ Loaded {} tracks", self.state.selected_playlist_tracks.len());
-                        } else {
-                            self.state.selected_playlist_tracks = Vec::new();
-                            self.state.current_view = ViewType::PlaylistTracks;
-                            self.state.auth_message = "⚠️ Playlist has no tracks".to_string();
-                        }
+                self.state.auth_message = "🔄 Loading ALL playlist tracks...".to_string();
+                match client.get_all_playlist_tracks(playlist_id).await {
+                    Ok(all_items) => {
+                        self.state.selected_playlist_tracks = all_items
+                            .into_iter()
+                            .filter_map(|item| item.track)
+                            .collect();
+                        self.state.current_view = ViewType::PlaylistTracks;
+                        self.list_state.select(Some(0)); // Reset selection to first item
+                        self.state.auth_message = format!("✅ Loaded ALL {} tracks", self.state.selected_playlist_tracks.len());
                     },
                     Err(e) => {
-                        self.state.auth_message = format!("❌ Failed to load playlist tracks: {}", e);
+                        self.state.auth_message = format!("❌ Failed to load all tracks: {}", e);
+                        // Fallback to loading first 50 tracks
+                        match client.get_playlist_tracks(playlist_id, 50, 0).await {
+                            Ok(tracks_response) => {
+                                if let Some(items) = tracks_response.items {
+                                    self.state.selected_playlist_tracks = items
+                                        .into_iter()
+                                        .filter_map(|item| item.track)
+                                        .collect();
+                                    self.state.current_view = ViewType::PlaylistTracks;
+                                    self.list_state.select(Some(0)); // Reset selection to first item
+                                    self.state.auth_message = format!("⚠️ Loaded first {} tracks only", self.state.selected_playlist_tracks.len());
+                                } else {
+                                    self.state.selected_playlist_tracks = Vec::new();
+                                    self.state.current_view = ViewType::PlaylistTracks;
+                                    self.state.auth_message = "⚠️ Playlist has no tracks".to_string();
+                                }
+                            },
+                            Err(_) => {
+                                self.state.auth_message = format!("❌ Failed to load playlist tracks: {}", e);
+                            }
+                        }
                     }
                 }
             } else {
@@ -242,27 +267,45 @@ impl App {
     pub async fn load_liked_songs(&mut self) {
         if self.state.user_authenticated {
             if let Some(ref client) = self.spotify_client {
-                self.state.auth_message = "🔄 Loading liked songs...".to_string();
-                match client.get_liked_songs(50, 0).await {
-                    Ok(response) => {
-                        if let Some(items) = response.get("items").and_then(|v| v.as_array()) {
-                            let mut tracks = Vec::new();
-                            for item in items {
-                                if let Some(track_obj) = item.get("track") {
-                                    if let Ok(track) = serde_json::from_value::<crate::models::Track>(track_obj.clone()) {
-                                        tracks.push(track);
-                                    }
+                self.state.auth_message = "🔄 Loading ALL liked songs...".to_string();
+                match client.get_all_liked_songs().await {
+                    Ok(all_items) => {
+                        let mut tracks = Vec::new();
+                        for item in all_items {
+                            if let Some(track_obj) = item.get("track") {
+                                if let Ok(track) = serde_json::from_value::<crate::models::Track>(track_obj.clone()) {
+                                    tracks.push(track);
                                 }
                             }
-                            self.state.liked_songs = tracks;
-                            self.state.auth_message = format!("✅ Loaded {} liked songs", self.state.liked_songs.len());
-                        } else {
-                            self.state.liked_songs = Vec::new();
-                            self.state.auth_message = "⚠️ No liked songs found".to_string();
                         }
+                        self.state.liked_songs = tracks;
+                        self.state.auth_message = format!("✅ Loaded ALL {} liked songs", self.state.liked_songs.len());
                     },
                     Err(e) => {
-                        self.state.auth_message = format!("❌ Failed to load liked songs: {}", e);
+                        self.state.auth_message = format!("❌ Failed to load all liked songs: {}", e);
+                        // Fallback to loading first 50 liked songs
+                        match client.get_liked_songs(50, 0).await {
+                            Ok(response) => {
+                                if let Some(items) = response.get("items").and_then(|v| v.as_array()) {
+                                    let mut tracks = Vec::new();
+                                    for item in items {
+                                        if let Some(track_obj) = item.get("track") {
+                                            if let Ok(track) = serde_json::from_value::<crate::models::Track>(track_obj.clone()) {
+                                                tracks.push(track);
+                                            }
+                                        }
+                                    }
+                                    self.state.liked_songs = tracks;
+                                    self.state.auth_message = format!("⚠️ Loaded first {} liked songs only", self.state.liked_songs.len());
+                                } else {
+                                    self.state.liked_songs = Vec::new();
+                                    self.state.auth_message = "⚠️ No liked songs found".to_string();
+                                }
+                            },
+                            Err(_) => {
+                                self.state.auth_message = format!("❌ Failed to load liked songs: {}", e);
+                            }
+                        }
                     }
                 }
             } else {

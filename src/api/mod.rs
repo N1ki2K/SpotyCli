@@ -126,6 +126,41 @@ impl SpotifyClient {
         self.make_request(&endpoint).await
     }
 
+    pub async fn get_all_playlist_tracks(&self, playlist_id: &str) -> Result<Vec<crate::models::PlaylistTrack>> {
+        let mut all_tracks = Vec::new();
+        let mut offset = 0;
+        let limit = 50;
+
+        loop {
+            match self.get_playlist_tracks(playlist_id, limit, offset).await {
+                Ok(tracks_response) => {
+                    if let Some(items) = tracks_response.items {
+                        if items.is_empty() {
+                            break; // No more tracks
+                        }
+
+                        for item in items {
+                            all_tracks.push(item);
+                        }
+
+                        offset += limit;
+
+                        // Small delay to avoid rate limiting
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    } else {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error loading playlist tracks at offset {}: {}", offset, e);
+                    break;
+                }
+            }
+        }
+
+        Ok(all_tracks)
+    }
+
     pub async fn get_featured_playlists(&self, limit: u32) -> Result<SearchPlaylists> {
         let endpoint = format!("browse/featured-playlists?limit={}", limit);
         let response: serde_json::Value = self.make_request(&endpoint).await?;
@@ -311,9 +346,75 @@ impl SpotifyClient {
         self.make_user_request("GET", &endpoint, None).await
     }
 
+    pub async fn get_all_user_playlists(&self) -> Result<Vec<crate::models::Playlist>> {
+        let mut all_playlists = Vec::new();
+        let mut offset = 0;
+        let limit = 50;
+
+        loop {
+            match self.get_user_playlists(limit, offset).await {
+                Ok(response) => {
+                    if response.items.is_empty() {
+                        break; // No more playlists
+                    }
+
+                    for playlist in response.items {
+                        all_playlists.push(playlist);
+                    }
+
+                    offset += limit;
+
+                    // Small delay to avoid rate limiting
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
+                Err(e) => {
+                    eprintln!("Error loading user playlists at offset {}: {}", offset, e);
+                    break;
+                }
+            }
+        }
+
+        Ok(all_playlists)
+    }
+
     pub async fn get_liked_songs(&self, limit: u32, offset: u32) -> Result<serde_json::Value> {
         let endpoint = format!("me/tracks?limit={}&offset={}", limit.min(50), offset);
         self.make_user_request("GET", &endpoint, None).await
+    }
+
+    pub async fn get_all_liked_songs(&self) -> Result<Vec<serde_json::Value>> {
+        let mut all_tracks = Vec::new();
+        let mut offset = 0;
+        let limit = 50;
+
+        loop {
+            match self.get_liked_songs(limit, offset).await {
+                Ok(response) => {
+                    if let Some(items) = response.get("items").and_then(|v| v.as_array()) {
+                        if items.is_empty() {
+                            break; // No more tracks
+                        }
+
+                        for item in items {
+                            all_tracks.push(item.clone());
+                        }
+
+                        offset += limit;
+
+                        // Small delay to avoid rate limiting
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    } else {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error loading liked songs at offset {}: {}", offset, e);
+                    break;
+                }
+            }
+        }
+
+        Ok(all_tracks)
     }
 
     pub async fn add_to_queue(&self, track_uri: &str) -> Result<()> {
