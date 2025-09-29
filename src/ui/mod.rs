@@ -1187,6 +1187,9 @@ impl App {
                                     ')' => {
                                         self.toggle_like_selected_track().await;
                                     }
+                                    ']' => {
+                                        self.toggle_shuffle().await;
+                                    }
                                     _ => {
                                         self.state.auth_message.clear();
                                     }
@@ -1947,14 +1950,19 @@ impl App {
 
         f.render_widget(track_widget, player_chunks[0]);
 
-        // Player controls
+        // Player controls with shuffle button on the right side
         let play_status = if self.state.is_playing { "⏸ Pause" } else { "▶ Play" };
+        let shuffle_status = match self.state.shuffle_mode {
+            ShuffleMode::Off => "🔀 Off",
+            ShuffleMode::On => "🔀 On",
+            ShuffleMode::SmartShuffle => "🔀✨ Smart",
+        };
         let shuffle_icon = match self.state.shuffle_mode {
             ShuffleMode::Off => "",
             ShuffleMode::On => " 🔀",
             ShuffleMode::SmartShuffle => " 🔀✨",
         };
-        let controls = format!("⏮ Prev | {} | Next ⏭{}\n\nControls:\nEnter: Play | m: Add to Queue | s: Sync | P: Shuffle\nSpace: Play/Pause | /: Search | ↑↓: Navigate\nn: Next | p: Previous | Alt+R: Prev | Alt+T: Next | q: Quit\n+/-: Volume | u: Auth | r: Refresh Recent | L: Load Liked Songs | Q: Refresh Queue\n1-7: Switch Views | Ctrl+←→: Switch Tabs (7=Errors/Logs)", play_status, shuffle_icon);
+        let controls = format!("⏮ Prev | {} | Next ⏭{}            {}\n\nControls:\nEnter: Play | m: Add to Queue | s: Sync | ]: Shuffle\nSpace: Play/Pause | /: Search | ↑↓: Navigate\nn: Next | p: Previous | Alt+R: Prev | Alt+T: Next | q: Quit\n+/-: Volume | u: Auth | r: Refresh Recent | L: Load Liked Songs | Q: Refresh Queue\n1-7: Switch Views | Ctrl+←→: Switch Tabs (7=Errors/Logs)", play_status, shuffle_icon, shuffle_status);
         let controls_color = if self.state.user_authenticated { Color::Green } else { Color::Yellow };
         let controls_widget = Paragraph::new(controls)
             .block(Block::default().borders(Borders::ALL).title("Controls"))
